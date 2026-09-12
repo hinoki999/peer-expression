@@ -1,0 +1,33 @@
+#!/bin/sh
+# Blocks the two mistakes that are expensive to undo: committing a secret,
+# and committing something huge. Both live in history forever otherwise.
+set -e
+fail=0
+
+staged=$(git diff --cached --name-only --diff-filter=ACM)
+[ -z "$staged" ] && exit 0
+
+for f in $staged; do
+  case "$f" in
+    *.pem|*.key|*.keystore|*.p8|*.p12|*.mobileprovision|.env|.env.*)
+      [ "$f" = ".env.example" ] && continue
+      echo "BLOCKED: $f looks like a credential."; fail=1 ;;
+  esac
+  if [ -f "$f" ]; then
+    size=$(wc -c < "$f")
+    if [ "$size" -gt 2000000 ]; then
+      echo "BLOCKED: $f is $((size/1024))KB. Large files bloat history permanently."; fail=1
+    fi
+    if git diff --cached "$f" | grep -qE '^\+.*(AKIA[0-9A-Z]{16}|-----BEGIN [A-Z ]*PRIVATE KEY-----|sk_live_[0-9a-zA-Z]{20,})'; then
+      echo "BLOCKED: $f contains what looks like a live secret."; fail=1
+    fi
+  fi
+done
+
+if [ "$fail" = "1" ]; then
+  echo ""
+  echo "Nothing was committed. Fix the above, or use --no-verify if you are certain."
+  exit 1
+fi
+
+node tools/check-invariants.mjs

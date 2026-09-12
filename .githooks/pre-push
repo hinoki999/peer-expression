@@ -1,0 +1,15 @@
+#!/bin/sh
+# Refuses a direct push to main. Work lands via a pull request.
+while read -r _local_ref _local_sha remote_ref _remote_sha; do
+  case "$remote_ref" in
+    refs/heads/main)
+      echo ""
+      echo "BLOCKED: direct push to main."
+      echo "Branch, push the branch, open a PR:"
+      echo "    git switch -c feat/your-change"
+      echo "    git push -u origin feat/your-change"
+      echo ""
+      exit 1 ;;
+  esac
+done
+exit 0

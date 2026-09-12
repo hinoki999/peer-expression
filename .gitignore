@@ -1,0 +1,35 @@
+# dependencies
+node_modules/
+.pnpm-store/
+
+# build output
+dist/
+build/
+.turbo/
+*.tsbuildinfo
+
+# native
+ios/
+android/
+.expo/
+
+# secrets — never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.keystore
+*.p8
+*.p12
+*.mobileprovision
+google-services.json
+GoogleService-Info.plist
+
+# research — no third-party corpus is ever stored, here or anywhere
+research/corpus/
+
+# local
+*.log
+.DS_Store
+coverage/

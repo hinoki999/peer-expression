@@ -1,0 +1,13 @@
+{
+  "name": "peer-expression",
+  "private": true,
+  "packageManager": "pnpm@10.28.0",
+  "engines": { "node": ">=22" },
+  "scripts": {
+    "check": "node tools/check-invariants.mjs",
+    "build": "turbo run build",
+    "test": "pnpm check && turbo run test",
+    "lint": "turbo run lint"
+  },
+  "devDependencies": { "turbo": "^2.3.0", "typescript": "^5.7.0" }
+}

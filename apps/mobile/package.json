@@ -1,0 +1,7 @@
+{
+  "name": "@pe/mobile",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "dependencies": { "@pe/shared": "workspace:*", "@pe/api-client": "workspace:*" }
+}

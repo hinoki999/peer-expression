@@ -1,0 +1,7 @@
+{
+  "name": "@pe/shared",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": { "lint": "tsc -p tsconfig.json --noEmit" }
+}
