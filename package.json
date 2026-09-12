@@ -2,7 +2,7 @@
   "name": "peer-expression",
   "private": true,
   "packageManager": "pnpm@10.28.0",
-  "engines": { "node": ">=22" },
+  "engines": { "node": ">=20" },
   "scripts": {
     "check": "node tools/check-invariants.mjs",
     "build": "turbo run build",

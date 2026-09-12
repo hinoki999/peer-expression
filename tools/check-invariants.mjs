@@ -8,8 +8,9 @@
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const ROOT = new URL('..', import.meta.url).pathname;
+const ROOT = fileURLToPath(new URL('..', import.meta.url));
 let failures = [];
 const ok = (id, what) => console.log(`  \x1b[32mPASS\x1b[0m ${id}  ${what}`);
 const bad = (id, what, why) => { failures.push(`${id} ${what}: ${why}`);
