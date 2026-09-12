@@ -3,5 +3,10 @@
   "version": "0.0.0",
   "type": "module",
   "main": "./src/index.ts",
-  "dependencies": { "@pe/shared": "workspace:*" }
+  "dependencies": {
+    "@pe/shared": "workspace:*"
+  },
+  "scripts": {
+    "lint": "tsc -p tsconfig.json --noEmit"
+  }
 }
