@@ -1,0 +1,17 @@
+# Normalise text in the repo, but force LF where CRLF would break things.
+* text=auto eol=lf
+
+# Shell scripts and hooks MUST be LF. A CRLF shebang fails on Windows with
+# "bad interpreter: /bin/sh^M" and the hook silently stops protecting you.
+*.sh        text eol=lf
+.githooks/* text eol=lf
+*.mjs       text eol=lf
+
+# Binary — never touch these
+*.png binary
+*.jpg binary
+*.pdf binary
+*.ttf binary
+*.otf binary
+*.woff  binary
+*.woff2 binary
