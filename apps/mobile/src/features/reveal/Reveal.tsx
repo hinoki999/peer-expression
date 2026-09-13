@@ -29,6 +29,14 @@ interface Props {
  *
  * Reduced motion is a variant, not a disabling: the same beats land, with
  * instant state changes instead of tweens, so the payoff still arrives.
+ *
+ * Per-option figures are whole percentages, not tenths. At four options
+ * "about 1 in 10" can sit beside two visibly different bars, and anything
+ * at or below 4% rounds to "0 in 10" next to a drawn bar — the figure
+ * contradicting the picture. A screen-reader user loses the distinction
+ * entirely, so the coarse form costs the accessible path most. Tenths stay
+ * where a single headline figure reads as confident rather than lossy:
+ * Discover, and the share card.
  */
 export function RevealRow({ label, glyph, spokenForm, value, isSelf, order, revealed }: Props) {
   const reduced = useReducedMotion();
@@ -55,7 +63,7 @@ export function RevealRow({ label, glyph, spokenForm, value, isSelf, order, reve
       accessibilityRole="text"
       accessibilityLabel={
         revealed && value !== null
-          ? `${spokenForm}. About ${Math.round(value / 10)} in 10 chose this.${isSelf ? ' Your answer.' : ''}`
+          ? `${spokenForm}. ${value} out of 100 chose this.${isSelf ? ' Your answer.' : ''}`
           : spokenForm
       }
     >
@@ -66,10 +74,8 @@ export function RevealRow({ label, glyph, spokenForm, value, isSelf, order, reve
       <View style={styles.content}>
         {glyph ? <Text style={styles.glyph}>{glyph}</Text> : null}
         <Text style={[styles.label, isSelf && styles.labelSelf]}>{label}</Text>
-        {revealed ? (
-          <Text style={[styles.value, isSelf && styles.labelSelf]}>
-            {value === null ? '—' : `${Math.round(value / 10)} in 10`}
-          </Text>
+        {revealed && value !== null ? (
+          <Text style={[styles.value, isSelf && styles.labelSelf]}>{`${value}%`}</Text>
         ) : null}
       </View>
     </View>
@@ -80,7 +86,7 @@ const styles = StyleSheet.create({
   row: { marginBottom: space[3], borderRadius: 6, overflow: 'hidden' },
   track: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
   fill: { backgroundColor: color.bar },
-  fillSelf: { backgroundColor: '#1E3A47' },
+  fillSelf: { backgroundColor: color.barSelf },
   content: {
     flexDirection: 'row', alignItems: 'center', gap: space[3],
     paddingVertical: space[4], paddingHorizontal: space[4], minHeight: 56,

@@ -15,6 +15,8 @@ export const color = {
   /** The user's own choice in the reveal. Reads as "you", not as brand. */
   self: '#6FC3E8',
   bar: '#2B343C',
+  /** The self bar. Darker than `self` so the label stays legible on it. */
+  barSelf: '#1E3A47',
 } as const;
 
 export const space = [0, 4, 8, 12, 16, 24, 32, 48] as const;

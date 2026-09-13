@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { Card, CardOption, PublishedStatistic } from '@pe/shared';
@@ -38,21 +38,47 @@ export function Drop() {
   const cardOptions = card ? options.filter((o) => o.cardId === card.cardId) : [];
   const stat = card ? stats.find((s) => s.cardId === card.cardId) : undefined;
 
+  /**
+   * Every timer this card scheduled. `phase !== 'asking'` guards a second
+   * tap on the same card; it does not guard the timers, which outlive the
+   * component unless something clears them.
+   *
+   * Left uncleared they fire after unmount, backgrounding or a fast
+   * navigation — setting state on a dead component, and stacking
+   * `setIndex(i => i + 1)` calls if more than one is in flight. On a slow
+   * device that reads as "the drop skipped two cards": rare, hard to
+   * reproduce, easy to blame on the wrong thing. It would also corrupt the
+   * 60fps spike's measurements.
+   */
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+
+  const clearTimers = useCallback(() => {
+    for (const t of timers.current) clearTimeout(t);
+    timers.current = [];
+  }, []);
+
+  const after = useCallback((ms: number, fn: () => void) => {
+    timers.current.push(setTimeout(fn, ms));
+  }, []);
+
+  useEffect(() => clearTimers, [clearTimers]);
+
   const choose = useCallback((optionId: string) => {
     if (phase !== 'asking') return;
+    clearTimers();
     // Haptic fires with the tap, not after it.
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setChosen(optionId);
     setPhase('revealed');
-    setTimeout(() => {
+    after(beat.reveal - beat.lock, () => {
       void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    }, beat.reveal - beat.lock);
-    setTimeout(() => {
+    });
+    after(beat.advance, () => {
       setIndex((i) => i + 1);
       setChosen(null);
       setPhase('asking');
-    }, beat.advance);
-  }, [phase]);
+    });
+  }, [phase, clearTimers, after]);
 
   if (!card) {
     return (
