@@ -1,0 +1,13 @@
+{
+  "name": "@pe/device-store",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./src/index.ts",
+  "scripts": {
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "test": "node --experimental-strip-types --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "@pe/shared": "workspace:*"
+  }
+}
