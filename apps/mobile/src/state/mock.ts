@@ -9,12 +9,13 @@ import type { Card, CardOption, PublishedStatistic } from '@pe/shared';
  * Every card here passes the four-object rule; none has a person as its
  * subject.
  */
-const cards: Card[] = [
+export const cards: Card[] = [
   {
     cardId: 'c-signal-eyes',
     subjectType: 'SYMBOL',
     frameId: 'f-what-does-it-mean',
     body: 'What does 👀 mean when someone sends it?',
+    voiceLine: 'apparently none of us can function',
     cohortBands: ['B16_17'],
     origin: 'TEAM',
     entropyScore: null,
@@ -26,6 +27,7 @@ const cards: Card[] = [
     subjectType: 'SELF',
     frameId: 'f-when-i-like-someone',
     body: 'When I like someone, I send them irrelevant TikToks instead of saying anything.',
+    voiceLine: 'communication is dead and we killed it',
     cohortBands: ['B16_17'],
     origin: 'TEAM',
     entropyScore: null,
@@ -37,6 +39,7 @@ const cards: Card[] = [
     subjectType: 'HYPOTHETICAL',
     frameId: 'f-whats-worse',
     body: "What's worse — left on delivered, or left on read?",
+    voiceLine: null,
     cohortBands: ['B16_17'],
     origin: 'TEAM',
     entropyScore: null,
@@ -45,7 +48,7 @@ const cards: Card[] = [
   },
 ];
 
-const options: CardOption[] = [
+export const options: CardOption[] = [
   { optionId: 'o1', cardId: 'c-signal-eyes', label: 'flirting',  glyph: '😏', spokenForm: 'flirting', ordinal: 0 },
   { optionId: 'o2', cardId: 'c-signal-eyes', label: 'shocked',   glyph: '😳', spokenForm: 'shocked', ordinal: 1 },
   { optionId: 'o3', cardId: 'c-signal-eyes', label: 'look at this', glyph: '👇', spokenForm: 'look at this', ordinal: 2 },
@@ -64,7 +67,7 @@ const options: CardOption[] = [
  * numerator, or a decimal (I13). The third card has none, so the shell
  * shows the still-forming state too.
  */
-const statistics: PublishedStatistic[] = [
+export const statistics: PublishedStatistic[] = [
   {
     cardId: 'c-signal-eyes',
     scopeShown: 'B16_17',

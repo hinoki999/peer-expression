@@ -17,6 +17,8 @@ interface Props {
   /** Index in the option list — staggers the bars slightly. */
   order: number;
   revealed: boolean;
+  /** Override for spike 2, which tunes the beats on the device. */
+  barsDelayMs?: number;
 }
 
 /**
@@ -38,20 +40,22 @@ interface Props {
  * where a single headline figure reads as confident rather than lossy:
  * Discover, and the share card.
  */
-export function RevealRow({ label, glyph, spokenForm, value, isSelf, order, revealed }: Props) {
+export function RevealRow({
+  label, glyph, spokenForm, value, isSelf, order, revealed, barsDelayMs,
+}: Props) {
   const reduced = useReducedMotion();
   const fill = useSharedValue(0);
 
   useEffect(() => {
     if (!revealed || value === null) return;
-    const delay = beat.bars + (isSelf ? 0 : 90 + order * 60);
+    const delay = (barsDelayMs ?? beat.bars) + (isSelf ? 0 : 90 + order * 60);
     fill.value = reduced
       ? withDelay(delay, withTiming(value / 100, { duration: 0 }))
       : withDelay(delay, withTiming(value / 100, {
           duration: motion.bars.duration,
           easing: Easing.out(Easing.cubic),
         }));
-  }, [revealed, value, isSelf, order, reduced, fill]);
+  }, [revealed, value, isSelf, order, reduced, fill, barsDelayMs]);
 
   const barStyle = useAnimatedStyle(() => ({ flex: fill.value }));
   const restStyle = useAnimatedStyle(() => ({ flex: 1 - fill.value }));
