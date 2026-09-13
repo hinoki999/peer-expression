@@ -1,5 +1,5 @@
 import type { ApiClient, DropRequest, DropResponse, VoteSubmission,
-  VoteAccepted, PublishedStatistic, PublicationScope, UsageMilestone } from '@pe/shared';
+  VoteAccepted, PublishedStatistic, UsageMilestone } from '@pe/shared';
 import { USAGE_MILESTONES } from '@pe/shared';
 
 /**
@@ -20,9 +20,10 @@ export function createMockAdapter(seed: {
 
   return {
     async getDrop(req: DropRequest): Promise<DropResponse> {
-      const key = `${req.scope}:${req.dropDate}`;
-      const drop = seed.drops[key];
-      if (!drop) throw new Error(`mock: no drop seeded for ${key}`);
+      // Scope is server-derived; the mock keys on date alone, the same as
+      // a real backend would once the assertion supplies the band.
+      const drop = seed.drops[req.dropDate];
+      if (!drop) throw new Error(`mock: no drop seeded for ${req.dropDate}`);
       return drop;
     },
 
@@ -31,17 +32,18 @@ export function createMockAdapter(seed: {
       return { accepted: true };
     },
 
-    async getStatistics(cardIds, scope) {
-      return seed.statistics.filter(
-        (s) => cardIds.includes(s.cardId) && s.scopeShown === scope,
-      );
+    async getStatistics(cardIds) {
+      return seed.statistics.filter((s) => cardIds.includes(s.cardId));
     },
 
-    async getUsageMilestone(formatId: string): Promise<UsageMilestone> {
-      const count = seed.usage[formatId] ?? 0;
-      let milestone = 0;
-      for (const m of USAGE_MILESTONES) if (count >= m) milestone = m;
-      return { formatId, milestone };
+    async getUsageMilestones(): Promise<readonly UsageMilestone[]> {
+      // A catalog slice, never one format by id — an authenticated request
+      // for a specific format is itself evidence of ownership.
+      return Object.entries(seed.usage).map(([formatId, count]) => {
+        let milestone = 0;
+        for (const m of USAGE_MILESTONES) if (count >= m) milestone = m;
+        return { formatId, milestone };
+      });
     },
   };
 }
