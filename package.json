@@ -4,6 +4,8 @@
   "packageManager": "pnpm@10.28.0",
   "engines": { "node": ">=20" },
   "scripts": {
+    "start": "pnpm --filter @pe/mobile start",
+    "android": "pnpm --filter @pe/mobile android",
     "check": "node tools/check-invariants.mjs && node tools/check-taxonomy.mjs",
     "build": "turbo run build",
     "test": "pnpm check && turbo run test",
