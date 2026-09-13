@@ -1,21 +1,31 @@
 name: CI
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
 on:
   pull_request:
   push:
     branches: [main]
 
 jobs:
-  gate:
+  invariants:
     name: Invariant gate
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
-      # No install needed — the gate has zero dependencies on purpose,
-      # so it cannot be broken by a dependency change.
-      - name: Invariants
-        run: node tools/check-invariants.mjs
+      - run: node tools/check-invariants.mjs
+
+  taxonomy:
+    name: Taxonomy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node tools/check-taxonomy.mjs
 
   typecheck:
     name: Typecheck
@@ -27,3 +37,14 @@ jobs:
       - uses: pnpm/action-setup@v4
       - run: pnpm install --frozen-lockfile
       - run: pnpm lint
+
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run --recursive test

@@ -1,4 +1,3 @@
-import type { PublicationScope } from '../taxonomy/cohorts.ts';
 import type { Card, CardOption, PublishedStatistic, TrustAssertion } from '../model/index.ts';
 
 /**
@@ -12,8 +11,13 @@ import type { Card, CardOption, PublishedStatistic, TrustAssertion } from '../mo
  */
 
 export interface DropRequest {
-  scope: PublicationScope;
   dropDate: string;
+  /**
+   * No scope. The band is derived server-side from the signed assertion,
+   * exactly as on the vote path (I30). A client that names its own scope
+   * can read another band's content, which is I7 — and cohort separation
+   * is a safety mechanism, not a data-quality one.
+   */
 }
 
 export interface DropResponse {
@@ -45,6 +49,12 @@ export interface UsageMilestone {
 export interface ApiClient {
   getDrop(req: DropRequest): Promise<DropResponse>;
   submitVote(vote: VoteSubmission): Promise<VoteAccepted>;
-  getStatistics(cardIds: readonly string[], scope: PublicationScope): Promise<readonly PublishedStatistic[]>;
-  getUsageMilestone(formatId: string): Promise<UsageMilestone>;
+  /** Scope derives server-side. Card ids only. */
+  getStatistics(cardIds: readonly string[]): Promise<readonly PublishedStatistic[]>;
+  /**
+   * Milestones for a whole catalog slice, never one format by id.
+   * An authenticated request for a specific format is itself evidence of
+   * ownership — the linkage would be moved, not removed (doc 18 O3).
+   */
+  getUsageMilestones(): Promise<readonly UsageMilestone[]>;
 }

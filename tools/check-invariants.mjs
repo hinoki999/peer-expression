@@ -1,134 +1,206 @@
 #!/usr/bin/env node
 /**
- * The invariant gate. Runs on every commit, with no build step and no
- * dependencies, so it works from commit one and keeps working.
+ * The invariant gate.
  *
- * These are structural checks over the source. Runtime checks against a
- * live binding are added when the binding lands — the tests do not change.
+ * Zero dependencies and no build step, so it works from commit one and a
+ * dependency change cannot break it.
+ *
+ * It does not count invariants. It diffs the checks that actually ran
+ * against the registry and fails on any gap — an invariant is either
+ * enforced here, or explicitly marked pending with a reason. Adding a new
+ * one fails the build until somebody does one or the other.
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-let failures = [];
-const ok = (id, what) => console.log(`  \x1b[32mPASS\x1b[0m ${id}  ${what}`);
-const bad = (id, what, why) => { failures.push(`${id} ${what}: ${why}`);
-  console.log(`  \x1b[31mFAIL\x1b[0m ${id}  ${what}\n        ${why}`); };
 
-function read(p) { return readFileSync(join(ROOT, p), 'utf8'); }
+const read = (p) => readFileSync(join(ROOT, p), 'utf8');
 
-/** Scan code, not prose. Comments describe the rules and legitimately
- *  name the things the rules forbid. */
-function code(p) {
-  return read(p)
-    .replace(/\/\*[\s\S]*?\*\//g, '')   // block comments
-    .replace(/(?<!:)\/\/.*$/gm, '');      // line + trailing comments, sparing URLs
-}
+/** Scan code, not prose — comments legitimately name what the rules forbid. */
+const code = (p) =>
+  read(p)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(?<!:)\/\/.*$/gm, '');
+
 function walk(dir, out = []) {
   for (const e of readdirSync(join(ROOT, dir))) {
+    if (e === 'node_modules' || e === '.git' || e === 'dist') continue;
     const rel = join(dir, e);
-    if (e === 'node_modules' || e === '.git') continue;
     if (statSync(join(ROOT, rel)).isDirectory()) walk(rel, out);
     else if (['.ts', '.tsx'].includes(extname(e))) out.push(rel);
   }
   return out;
 }
 
+const enforced = new Set();
+const failures = [];
+
+/** Every check declares the invariant IDs it enforces. */
+function check(ids, label, fn) {
+  for (const id of ids) {
+    if (enforced.has(id)) failures.push(`${id} is enforced by more than one check`);
+    enforced.add(id);
+  }
+  let problem = null;
+  try { problem = fn(); } catch (e) { problem = `threw: ${e.message}`; }
+  const tag = ids.join('/');
+  if (problem) {
+    failures.push(`${tag} ${label}: ${problem}`);
+    console.log(`  \x1b[31mFAIL\x1b[0m ${tag.padEnd(9)} ${label}\n        ${problem}`);
+  } else {
+    console.log(`  \x1b[32mPASS\x1b[0m ${tag.padEnd(9)} ${label}`);
+  }
+}
+
+const body = (src, name) => (src.match(new RegExp(`interface ${name} \\{([^}]*)\\}`, 's')) ?? [, ''])[1];
+
 console.log('\nInvariant gate\n');
 
-// ---- I1 : exactly four card subjects ----
-{
-  const src = read('packages/shared/src/taxonomy/subjects.ts');
-  const m = src.match(/CARD_SUBJECTS = \[([^\]]*)\]/s);
+check(['I1'], 'four card subjects', () => {
+  const m = code('packages/shared/src/taxonomy/subjects.ts').match(/CARD_SUBJECTS = \[([^\]]*)\]/s);
   const n = m ? m[1].split(',').filter((x) => x.trim()).length : 0;
-  n === 4 ? ok('I1', 'four card subjects')
-          : bad('I1', 'four card subjects', `found ${n}`);
-}
+  return n === 4 ? null : `found ${n}`;
+});
 
-// ---- I2 : the vote counter carries no account key and no timestamp ----
-{
-  const src = code('packages/shared/src/model/index.ts');
-  const m = src.match(/interface VoteCounterKey \{([^}]*)\}/s);
-  const body = m ? m[1] : '';
-  const banned = ['accountId', 'userId', 'timestamp', 'answeredAt', 'ts:'];
-  const hit = banned.filter((b) => body.includes(b));
-  hit.length === 0 ? ok('I2', 'counters carry no identity or timestamp')
-                   : bad('I2', 'counters carry no identity or timestamp', `found ${hit.join(', ')}`);
-}
+check(['I2'], 'counters carry no identity or timestamp', () => {
+  const b = body(code('packages/shared/src/model/index.ts'), 'VoteCounterKey');
+  const hit = ['accountId', 'userId', 'timestamp', 'answeredAt'].filter((x) => b.includes(x));
+  return hit.length ? `found ${hit.join(', ')}` : null;
+});
 
-// ---- I13 / I17 : contract surface audit ----
-{
+check(['I5'], 'no personal history crosses the contract', () => {
+  const src = code('packages/shared/src/contracts/index.ts');
+  const hit = ['LocalAnswer', 'Flirtprint', 'answerHistory', 'localHistory'].filter((x) => src.includes(x));
+  return hit.length ? `contract references ${hit.join(', ')}` : null;
+});
+
+check(['I7'], 'no read operation accepts a client-supplied scope', () => {
+  const src = code('packages/shared/src/contracts/index.ts');
+  if (/getStatistics\([^)]*scope/.test(src)) return 'getStatistics takes a scope';
+  if (/scope\s*:/.test(body(src, 'DropRequest'))) return 'DropRequest carries a scope';
+  return null;
+});
+
+check(['I11', 'I12'], 'a vote returns no statistic', () => {
+  const b = body(code('packages/shared/src/contracts/index.ts'), 'VoteAccepted');
+  const hit = ['distribution', 'statistic', 'count', 'pending', 'percent'].filter((x) => b.includes(x));
+  return hit.length ? `VoteAccepted exposes ${hit.join(', ')}` : null;
+});
+
+check(['I13', 'I17'], 'contract surface clean', () => {
   const src = code('packages/shared/src/contracts/index.ts');
   const banned = [
-    ['recipient', 'I17 — an operation takes a recipient'],
-    ['toAccount', 'I17 — an operation targets an account'],
-    ['rawCount', 'I13 — an operation returns raw counts'],
-    ['numerator', 'I13 — an operation exposes a numerator'],
-    ['sampleSize', 'I13 — an operation exposes sample size'],
-    ['votedAt', 'I2 — an operation exposes a vote timestamp'],
-  ];
-  const hits = banned.filter(([t]) => src.includes(t));
-  hits.length === 0 ? ok('I13/I17', 'contract surface clean')
-                    : bad('I13/I17', 'contract surface clean', hits.map((h) => h[1]).join('; '));
-}
+    ['recipient', 'an operation takes a recipient'],
+    ['toAccount', 'an operation targets an account'],
+    ['rawCount', 'an operation returns raw counts'],
+    ['numerator', 'an operation exposes a numerator'],
+    ['sampleSize', 'an operation exposes sample size'],
+    ['votedAt', 'an operation exposes a vote timestamp'],
+  ].filter(([t]) => src.includes(t));
+  return banned.length ? banned.map((b) => b[1]).join('; ') : null;
+});
 
-// ---- I22 : privacy parameter floors ----
-{
-  const src = read('packages/shared/src/constants/thresholds.ts');
-  const num = (name) => {
-    const m = src.match(new RegExp(`${name} = (\\d+)`));
-    return m ? Number(m[1]) : NaN;
-  };
-  const checks = [
-    ['MIN_CELL_PUBLIC', num('MIN_CELL_PUBLIC'), num('MIN_CELL_PUBLIC_FLOOR')],
-    ['MIN_BATCH_DELTA', num('MIN_BATCH_DELTA'), num('MIN_BATCH_DELTA_FLOOR')],
-  ];
-  let bust = [];
-  for (const [name, value, floor] of checks) {
-    if (!Number.isFinite(value) || !Number.isFinite(floor)) bust.push(`${name} unreadable`);
-    else if (value < floor) bust.push(`${name}=${value} below floor ${floor}`);
+check(['I15'], 'publication scope is a closed union', () => {
+  const src = code('packages/shared/src/taxonomy/cohorts.ts');
+  if (!/PublicationScope = CohortBand \| typeof GLOBAL_SCOPE/.test(src)) return 'scope is not a closed union';
+  if (/string/.test(src.match(/type PublicationScope[^;]*/s)?.[0] ?? '')) return 'scope widens to string';
+  return null;
+});
+
+check(['I16'], 'the device store exposes no update path', () => {
+  const src = code('packages/device-store/src/answers/index.ts');
+  const hit = ['export function update', 'export function overwrite', 'export function setAnswer', 'UPDATE answer_local']
+    .filter((x) => src.includes(x));
+  return hit.length ? `found ${hit.join(', ')}` : null;
+});
+
+check(['I22'], 'privacy parameters at or above their floors', () => {
+  const src = code('packages/shared/src/constants/thresholds.ts');
+  const num = (n) => Number((src.match(new RegExp(`${n} = (\\d+)`)) ?? [, NaN])[1]);
+  const bust = [];
+  for (const n of ['MIN_CELL_PUBLIC', 'MIN_BATCH_DELTA']) {
+    const v = num(n), f = num(`${n}_FLOOR`);
+    if (!Number.isFinite(v) || !Number.isFinite(f)) bust.push(`${n} unreadable`);
+    else if (v < f) bust.push(`${n}=${v} below floor ${f}`);
   }
-  bust.length === 0 ? ok('I22', 'privacy parameters at or above their floors')
-                    : bad('I22', 'privacy parameters at or above their floors', bust.join('; '));
-}
+  return bust.length ? bust.join('; ') : null;
+});
 
-// ---- I30 : the band is signed, not a loose field on a vote ----
-{
+check(['I24'], 'usage exposes a milestone, never a count or a per-format lookup', () => {
   const src = code('packages/shared/src/contracts/index.ts');
-  const m = src.match(/interface VoteSubmission \{([^}]*)\}/s);
-  const body = m ? m[1] : '';
-  const loose = ['cohortBand', 'scope', 'band'].filter((f) =>
-    new RegExp(`^\\s*${f}[?]?:`, 'm').test(body));
-  loose.length === 0 && body.includes('assertion')
-    ? ok('I30', 'band travels in the signed assertion only')
-    : bad('I30', 'band travels in the signed assertion only',
-          loose.length ? `loose field(s): ${loose.join(', ')}` : 'no assertion on VoteSubmission');
-}
+  const b = body(src, 'UsageMilestone');
+  if (/\bcount\b|\bexact\b|\bprogress\b/.test(b)) return 'UsageMilestone exposes a count';
+  if (/getUsageMilestone\s*\(\s*formatId/.test(src)) return 'a per-format authenticated lookup exists';
+  return null;
+});
 
-// ---- structural: no forbidden schema objects anywhere ----
-{
-  const forbidden = ['avatarUrl', 'displayName', 'schoolId', 'followerCount', 'likeCount'];
+check(['I26'], 'the global scope is never labelled as peer data', () => {
+  const src = code('packages/shared/src/taxonomy/cohorts.ts');
+  const m = src.match(/SCOPE_LABEL[^=]*=\s*\{([^}]*)\}/s);
+  if (!m) return 'SCOPE_LABEL not found';
+  const g = m[1].match(/GLOBAL_ONBOARDING:\s*'([^']*)'/);
+  if (!g) return 'no label for the global scope';
+  return /your age|people like you|peers/i.test(g[1]) ? `global scope reads "${g[1]}"` : null;
+});
+
+check(['I30'], 'band travels in the signed assertion only', () => {
+  const src = code('packages/shared/src/contracts/index.ts');
+  const b = body(src, 'VoteSubmission');
+  const loose = ['cohortBand', 'scope', 'band'].filter((f) => new RegExp(`^\\s*${f}[?]?:`, 'm').test(b));
+  if (loose.length) return `loose field(s): ${loose.join(', ')}`;
+  return b.includes('assertion') ? null : 'no assertion on VoteSubmission';
+});
+
+// ---- structural sweep: objects the architecture forbids outright ----
+check([], 'no forbidden schema objects', () => {
+  const forbidden = [
+    'avatarUrl', 'displayName', 'schoolId', 'followerCount', 'likeCount',
+    'recipientId', 'threadId', 'replyTo', 'followerIds', 'latitude', 'longitude',
+  ];
   const hits = [];
-  for (const f of walk('packages').concat(walk('apps'))) {
+  for (const f of [...walk('packages'), ...walk('apps')]) {
     const src = code(f);
     for (const t of forbidden) if (src.includes(t)) hits.push(`${t} in ${f}`);
   }
-  hits.length === 0 ? ok('ABSENT', 'no forbidden schema objects')
-                    : bad('ABSENT', 'no forbidden schema objects', hits.join('; '));
+  return hits.length ? hits.join('; ') : null;
+});
+
+// ---- coverage : the point of the whole file ----
+console.log('');
+const reg = read('packages/shared/src/invariants/registry.ts');
+const registered = [...reg.matchAll(/id:\s*'(I\d+[a-z]?)'/g)].map((m) => m[1]);
+const pending = new Set(
+  [...reg.matchAll(/id:\s*'(I\d+[a-z]?)'[\s\S]*?(?=\{ id:|\];)/g)]
+    .filter((m) => /pending:/.test(m[0]))
+    .map((m) => m[1]),
+);
+
+const dupes = registered.filter((id, i) => registered.indexOf(id) !== i);
+if (dupes.length) failures.push(`registry lists ${[...new Set(dupes)].join(', ')} more than once`);
+
+const unknown = [...enforced].filter((id) => !registered.includes(id));
+if (unknown.length) failures.push(`checks reference unregistered invariants: ${unknown.join(', ')}`);
+
+const uncovered = registered.filter((id) => !enforced.has(id) && !pending.has(id));
+if (uncovered.length) {
+  failures.push(`registered with neither a check nor a pending reason: ${uncovered.join(', ')}`);
 }
 
-// ---- registry completeness ----
-{
-  const src = read('packages/shared/src/invariants/registry.ts');
-  const n = (src.match(/id:'I\d+'/g) || []).length;
-  n === 30 ? ok('REGISTRY', '30 invariants recorded')
-           : bad('REGISTRY', '30 invariants recorded', `found ${n}`);
+const claimedPending = [...pending].filter((id) => enforced.has(id));
+if (claimedPending.length) {
+  failures.push(`marked pending but actually enforced — drop the flag: ${claimedPending.join(', ')}`);
 }
+
+console.log(`  coverage: ${enforced.size} enforced · ${pending.size} pending · ${registered.length} registered`);
+if (pending.size) console.log(`  pending:  ${[...pending].join(' ')}`);
 
 console.log('');
 if (failures.length) {
-  console.error(`\x1b[31m${failures.length} invariant failure(s)\x1b[0m\n`);
+  console.error(`\x1b[31m${failures.length} failure(s)\x1b[0m`);
+  for (const f of failures) console.error(`  - ${f}`);
+  console.error('');
   process.exit(1);
 }
 console.log('\x1b[32mAll invariant checks passed\x1b[0m\n');
