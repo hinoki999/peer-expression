@@ -236,6 +236,12 @@ export const INVARIANTS: readonly Invariant[] = [
     test:'issuer schema declares no account-to-fingerprint column', source:'doc 21 T2, doc 31 s5, doc 32',
     pending:'needs the issuer — step 14' },
 
+  { id:'I31', statement:'Card content uses only emoji sequences the manifest permits',
+    enforcement:'ci-assertion', owner:'Caitie (the gate) \u2014 manifest contents unowned with the card library (doc 08)',
+    ciScope:'every emoji sequence in a seed card body or option, and every emoji in a registered mock card source, is present in SUPPORTED_EMOJI_SEQUENCES',
+    residual:'the manifest is provisional until step 4 runs on a device. A sequence can render on the two devices tested and still fail on an OEM font neither covered \u2014 doc 06 v2 s3. The gate constrains content, it does not verify rendering.',
+    test:'a card using an unlisted sequence -> build fails', source:'doc 06 v2 s6, doc 29, doc 32' },
+
   { id:'I30', statement:'The cohort band is signed by our Integrity Authority, never accepted from the client',
     enforcement:'signed-assertion', owner:BACKEND,
     ciScope:'no contract operation accepts a client-supplied band',

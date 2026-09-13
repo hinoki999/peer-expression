@@ -49,7 +49,7 @@ const options: CardOption[] = [
   { optionId: 'o1', cardId: 'c-signal-eyes', label: 'flirting',  glyph: '😏', spokenForm: 'flirting', ordinal: 0 },
   { optionId: 'o2', cardId: 'c-signal-eyes', label: 'shocked',   glyph: '😳', spokenForm: 'shocked', ordinal: 1 },
   { optionId: 'o3', cardId: 'c-signal-eyes', label: 'look at this', glyph: '👇', spokenForm: 'look at this', ordinal: 2 },
-  { optionId: 'o4', cardId: 'c-signal-eyes', label: 'nothing',   glyph: '🫥', spokenForm: 'nothing at all', ordinal: 3 },
+  { optionId: 'o4', cardId: 'c-signal-eyes', label: 'nothing',   glyph: '🙃', spokenForm: 'nothing at all', ordinal: 3 },
 
   { optionId: 'o5', cardId: 'c-self-tiktok', label: 'constantly', glyph: '💀', spokenForm: 'constantly', ordinal: 0 },
   { optionId: 'o6', cardId: 'c-self-tiktok', label: 'sometimes',  glyph: '😭', spokenForm: 'sometimes', ordinal: 1 },
