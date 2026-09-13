@@ -1,10 +1,25 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { Pressable, SafeAreaView, StyleSheet, Text, View } from 'react-native';
 import { Drop } from '../src/features/drop/Drop';
 import { EmojiFidelity } from '../src/features/spike/EmojiFidelity';
 import { RevealTuner } from '../src/features/spike/RevealTuner';
-import { ShareCardExport } from '../src/features/spike/ShareCardExport';
 import { color, space, type } from '../src/design/tokens';
+
+/**
+ * Loaded on tap, not at launch, because it imports Skia — which is native
+ * code compiled into a build and absent from Expo Go. A static import
+ * here would throw the moment the app started, on every device running
+ * through Expo Go, and take spikes 4 and 5 down with it.
+ *
+ * That matters for one specific reason: Expo Go is the only way to put
+ * this app on an iPhone without an Apple Developer enrolment, which is
+ * still open. Spike 4's iOS half and spike 5 both run fine without Skia.
+ * Spike 6 needs a real build and always did.
+ */
+const ShareCardExport = lazy(() =>
+  import('../src/features/spike/ShareCardExport')
+    .then((m) => ({ default: m.ShareCardExport })),
+);
 
 /**
  * THROWAWAY BRANCH — a picker, so one build answers three spikes.
@@ -25,7 +40,7 @@ type Screen = 'menu' | 'emoji' | 'reveal' | 'share' | 'drop';
 const ITEMS: { key: Screen; n: string; title: string; sub: string }[] = [
   { key: 'emoji',  n: '4', title: 'Emoji fidelity',  sub: 'sizing, and fallback inside the bundled face' },
   { key: 'reveal', n: '5', title: 'Reveal',          sub: 'tune the beats here, not in a rebuild' },
-  { key: 'share',  n: '6', title: 'Share card',      sub: 'export 4:5 and 9:16, check the type and the glyph' },
+  { key: 'share',  n: '6', title: 'Share card',      sub: 'export 4:5 and 9:16 — needs a real build, not Expo Go' },
   { key: 'drop',   n: '—', title: 'The drop',        sub: 'the loop, now with the voice line' },
 ];
 
@@ -58,7 +73,11 @@ export default function Index() {
           </Pressable>
           {screen === 'emoji' ? <EmojiFidelity /> : null}
           {screen === 'reveal' ? <RevealTuner /> : null}
-          {screen === 'share' ? <ShareCardExport /> : null}
+          {screen === 'share' ? (
+            <Suspense fallback={<SkiaLoading />}>
+              <ShareCardExport />
+            </Suspense>
+          ) : null}
           {screen === 'drop' ? <Drop /> : null}
         </View>
       )}
@@ -66,8 +85,21 @@ export default function Index() {
   );
 }
 
+/** Expo Go has no Skia, so this is where that shows up rather than at launch. */
+function SkiaLoading() {
+  return (
+    <View style={styles.loading}>
+      <Text style={styles.intro}>
+        Loading Skia. If this never finishes, you are in Expo Go — Skia is
+        native and is not bundled into it. Spike 6 needs a preview build.
+      </Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: color.ground },
+  loading: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: space[5] },
   wrap: { flex: 1 },
   menu: { flex: 1, padding: space[5], gap: space[4] },
   title: { ...type.question, color: color.ink },
