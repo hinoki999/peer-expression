@@ -4,10 +4,12 @@
   "private": true,
   "main": "expo-router/entry",
   "scripts": {
-    "start": "expo start",
     "android": "expo start --android",
+    "build:dev": "eas build --profile development --platform android",
+    "build:preview": "eas build --profile preview --platform android",
     "ios": "expo start --ios",
-    "lint": "tsc -p tsconfig.json --noEmit"
+    "lint": "tsc -p tsconfig.json --noEmit",
+    "start": "expo start"
   },
   "dependencies": {
     "@expo/metro-runtime": "~57.0.15",
