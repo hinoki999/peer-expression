@@ -33,3 +33,5 @@ research/corpus/
 *.log
 .DS_Store
 coverage/
+
+Claude outputs/

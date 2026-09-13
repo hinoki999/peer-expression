@@ -10,7 +10,7 @@
  * enforced here, or explicitly marked pending with a reason. Adding a new
  * one fails the build until somebody does one or the other.
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -193,15 +193,25 @@ check([], 'no forbidden schema objects', () => {
   return hits.length ? hits.join('; ') : null;
 });
 
-// ---- coverage : the point of the whole file ----
+// ---- coverage, and the attribution discipline (doc 32) ----
 console.log('');
 const reg = read('packages/shared/src/invariants/registry.ts');
-const registered = [...reg.matchAll(/id:\s*'(I\d+[a-z]?)'/g)].map((m) => m[1]);
-const pending = new Set(
-  [...reg.matchAll(/id:\s*'(I\d+[a-z]?)'[\s\S]*?(?=\{ id:|\];)/g)]
-    .filter((m) => /pending:/.test(m[0]))
-    .map((m) => m[1]),
-);
+
+/** Split the registry into one blob per entry so fields can't leak across. */
+const entries = [...reg.matchAll(/\{\s*id:\s*'(I\d+[a-z]?)'([\s\S]*?)(?=\n\n  \{ id:|\n\];)/g)]
+  .map((m) => ({ id: m[1], body: m[2] }));
+
+const registered = entries.map((e) => e.id);
+const field = (e, name) => new RegExp(`\\b${name}\\s*:`).test(e.body);
+const enumOf = (e, name) => (e.body.match(new RegExp(`\\b${name}\\s*:\\s*'([^']*)'`)) ?? [, ''])[1];
+
+const ENFORCEMENT_CLASSES = [
+  'client-affordance', 'server-validation', 'signed-assertion',
+  'ci-assertion', 'human-process',
+];
+
+const pending = new Set(entries.filter((e) => field(e, 'pending')).map((e) => e.id));
+const ciCovered = new Set(entries.filter((e) => field(e, 'ciScope')).map((e) => e.id));
 
 const dupes = registered.filter((id, i) => registered.indexOf(id) !== i);
 if (dupes.length) failures.push(`registry lists ${[...new Set(dupes)].join(', ')} more than once`);
@@ -214,13 +224,129 @@ if (uncovered.length) {
   failures.push(`registered with neither a check nor a pending reason: ${uncovered.join(', ')}`);
 }
 
-const claimedPending = [...pending].filter((id) => enforced.has(id));
-if (claimedPending.length) {
-  failures.push(`marked pending but actually enforced — drop the flag: ${claimedPending.join(', ')}`);
+// --- the attribution rules themselves ---
+
+for (const e of entries) {
+  const cls = enumOf(e, 'enforcement');
+  if (!cls) {
+    failures.push(`${e.id} declares no enforcement class — name where the guarantee holds`);
+  } else if (!ENFORCEMENT_CLASSES.includes(cls)) {
+    failures.push(`${e.id} enforcement '${cls}' is not one of doc 03's five classes`);
+  }
+  if (!field(e, 'owner')) {
+    failures.push(`${e.id} names no owner — 'unowned — <what>' is a valid answer`);
+  }
+  // A CI assertion that claims to be in place must have a check behind it.
+  // A pending one is already saying the mechanism does not exist.
+  if (cls === 'ci-assertion' && !pending.has(e.id) && !ciCovered.has(e.id)) {
+    failures.push(`${e.id} claims enforcement by CI assertion but registers no check`);
+  }
+  // The rule doc 32 was written for: a check must state what it covers.
+  if (enforced.has(e.id) && !ciCovered.has(e.id)) {
+    failures.push(`${e.id} has a registered check but no ciScope — state what the job actually asserts`);
+  }
 }
 
-console.log(`  coverage: ${enforced.size} enforced · ${pending.size} pending · ${registered.length} registered`);
-if (pending.size) console.log(`  pending:  ${[...pending].join(' ')}`);
+const held = registered.filter((id) => !pending.has(id));
+
+console.log(`  enforcement point exists: ${held.length}`);
+console.log(`  CI check registered:      ${ciCovered.size}`);
+console.log(`  pending:                  ${pending.size}`);
+console.log(`  registered:               ${registered.length}`);
+
+const supporting = [...ciCovered].filter((id) => pending.has(id));
+if (supporting.length) {
+  console.log('');
+  console.log(`  \x1b[33mCI check but no enforcement point\x1b[0m — the check supports the`);
+  console.log(`  guarantee, it does not deliver it: ${supporting.join(' ')}`);
+}
+if (pending.size) {
+  console.log('');
+  console.log(`  pending: ${[...pending].join(' ')}`);
+}
+
+// ---- the generated map ----
+const esc = (t) => String(t ?? '').replace(/\|/g, '\\|').replace(/\s*\n\s*/g, ' ').trim();
+
+/** Shared constants the registry uses instead of repeating a literal. */
+const consts = Object.fromEntries(
+  [...reg.matchAll(/^const ([A-Z_]+) = '((?:[^'\\]|\\.)*)';/gm)].map((m) => [m[1], m[2]]),
+);
+
+/**
+ * Read one field for the map. Handles both quote styles — a statement
+ * containing an apostrophe is written with double quotes, and silently
+ * dropping those is exactly the class of gap this file exists to catch —
+ * and resolves a constant reference to its value.
+ */
+function str(e, name) {
+  const q = e.body.match(
+    new RegExp(`\\b${name}\\s*:\\s*(?:'((?:[^'\\\\]|\\\\.)*)'|"((?:[^"\\\\]|\\\\.)*)")`),
+  );
+  if (q) {
+    const raw = q[1] ?? q[2];
+    return esc(raw.replace(/\\u2019/g, '’').replace(/\\'/g, "'").replace(/\\"/g, '"'));
+  }
+  const ref = e.body.match(new RegExp(`\\b${name}\\s*:\\s*([A-Z_]+)\\s*,`));
+  return ref && consts[ref[1]] ? esc(consts[ref[1]]) : '';
+}
+
+for (const e of entries) {
+  for (const f of ['statement', 'owner', 'source']) {
+    if (!str(e, f)) failures.push(`${e.id}: could not read '${f}' for the map — generator bug`);
+  }
+}
+
+const lines = [
+  '# Enforcement map',
+  '',
+  '**Generated by `tools/check-invariants.mjs`. Do not edit by hand.**',
+  '',
+  'Every guarantee, the mechanism that holds it, who owns that mechanism,',
+  'what CI actually asserts about this repo, and what is left over.',
+  '',
+  'Per doc 32: a CI check is not an enforcement point. An invariant can',
+  'carry a check and still be unenforced — the check supports the guarantee,',
+  'it does not deliver it.',
+  '',
+  `\`${held.length}\` enforcement points exist · \`${ciCovered.size}\` CI checks · `
+    + `\`${pending.size}\` pending · \`${registered.length}\` registered`,
+  '',
+];
+
+for (const cls of ENFORCEMENT_CLASSES) {
+  const group = entries.filter((e) => enumOf(e, 'enforcement') === cls);
+  if (!group.length) continue;
+  lines.push(`## ${cls}`, '');
+  for (const e of group) {
+    const isPending = pending.has(e.id);
+    lines.push(`### ${e.id} — ${isPending ? '**NOT BUILT**' : 'in place'}`, '');
+    lines.push(`> ${str(e, 'statement')}`, '');
+    lines.push(`- **owner** — ${str(e, 'owner')}`);
+    if (isPending) lines.push(`- **not built** — ${str(e, 'pending')}`);
+    lines.push(`- **CI asserts** — ${ciCovered.has(e.id) ? str(e, 'ciScope') : '_nothing_'}`);
+    if (field(e, 'residual')) lines.push(`- **residual** — ${str(e, 'residual')}`);
+    lines.push(`- **source** — ${str(e, 'source')}`);
+    lines.push('');
+  }
+}
+
+/**
+ * Only on a clean run.
+ *
+ * A failing gate has, by definition, read a registry it does not accept.
+ * Writing the map anyway leaves a committed artifact describing code that
+ * did not pass — which is the exact failure this file was added to stop.
+ * It was also a real bug: the first committed map was generated during a
+ * deliberately-broken run and silently omitted I15.
+ */
+console.log('');
+if (failures.length) {
+  console.log('  \x1b[33mgate failed — docs/enforcement-map.md left untouched\x1b[0m');
+} else {
+  writeFileSync(join(ROOT, 'docs/enforcement-map.md'), lines.join('\n'));
+  console.log('  wrote docs/enforcement-map.md');
+}
 
 console.log('');
 if (failures.length) {
