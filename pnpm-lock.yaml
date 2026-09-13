@@ -32,6 +32,12 @@ importers:
 
   packages/config: {}
 
+  packages/device-store:
+    dependencies:
+      '@pe/shared':
+        specifier: workspace:*
+        version: link:../shared
+
   packages/shared: {}
 
 packages:
