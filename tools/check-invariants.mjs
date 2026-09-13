@@ -109,11 +109,37 @@ check(['I15'], 'publication scope is a closed union', () => {
   return null;
 });
 
-check(['I16'], 'the device store exposes no update path', () => {
+check(['I16'], 'local history is append-only', () => {
   const src = code('packages/device-store/src/answers/index.ts');
   const hit = ['export function update', 'export function overwrite', 'export function setAnswer', 'UPDATE answer_local']
     .filter((x) => src.includes(x));
   return hit.length ? `found ${hit.join(', ')}` : null;
+});
+
+/**
+ * I16's second half. Append-only history is only half the guarantee: a
+ * revision must not produce a second contribution to the counters. The
+ * absence of an update path says nothing about that, so it is checked
+ * separately at the two places the structure has to hold it — the schema
+ * and the queue.
+ */
+check(['I16b'], 'a card contributes to the counters at most once', () => {
+  const mig = code('packages/device-store/src/migrations/index.ts');
+  const box = code('packages/device-store/src/outbox/index.ts');
+  const bust = [];
+
+  if (!/UNIQUE INDEX[^;]*ON outbox\(card_id\)[^;]*kind = 'VOTE'/is.test(mig))
+    bust.push('no unique index on (card_id) where kind = VOTE');
+  if (!/CREATE TABLE IF NOT EXISTS vote_sent/i.test(mig))
+    bust.push('no vote_sent table — the marker must outlive the drain');
+  if (!/INSERT INTO vote_sent/i.test(box))
+    bust.push('drain does not record that the card contributed');
+  if (!/alreadySent\(db, cardId\)/.test(box))
+    bust.push('enqueue does not consult the sent marker');
+  if (!/band_state = 'RELEASED'/.test(box))
+    bust.push('ready() does not gate on RELEASED');
+
+  return bust.length ? bust.join('; ') : null;
 });
 
 check(['I22'], 'privacy parameters at or above their floors', () => {
