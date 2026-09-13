@@ -84,7 +84,9 @@ export function RevealRow({ label, glyph, spokenForm, value, isSelf, order, reve
 
 const styles = StyleSheet.create({
   row: { marginBottom: space[3], borderRadius: 6, overflow: 'hidden' },
-  track: { ...StyleSheet.absoluteFillObject, flexDirection: 'row' },
+  // Written out rather than spread from StyleSheet.absoluteFill*, whose
+  // shape and typing have moved between React Native versions.
+  track: { position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, flexDirection: 'row' },
   fill: { backgroundColor: color.bar },
   fillSelf: { backgroundColor: color.barSelf },
   content: {
