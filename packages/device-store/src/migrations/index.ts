@@ -51,6 +51,48 @@ export const MIGRATIONS: readonly Migration[] = [
       );
     `,
   },
+  {
+    version: 2,
+    name: 'outbox-one-vote-per-card',
+    up: `
+      -- Copy-then-swap. The outbox gains card_id and a three-state band
+      -- column, and neither can be added in place without losing the
+      -- CHECK constraint. A failed migration must not lose a user's
+      -- history, so the old table is only dropped once the new one is
+      -- populated.
+      CREATE TABLE outbox_v2 (
+        local_id   TEXT PRIMARY KEY,
+        kind       TEXT NOT NULL,
+        card_id    TEXT,
+        payload    TEXT NOT NULL,
+        queued_at  TEXT NOT NULL,
+        band_state TEXT NOT NULL DEFAULT 'HELD'
+                   CHECK (band_state IN ('HELD','RELEASED','DISCARDED'))
+      );
+
+      INSERT INTO outbox_v2 (local_id, kind, card_id, payload, queued_at, band_state)
+        SELECT local_id, kind, NULL, payload, queued_at,
+               CASE WHEN band_known = 1 THEN 'RELEASED' ELSE 'HELD' END
+        FROM outbox;
+
+      DROP TABLE outbox;
+      ALTER TABLE outbox_v2 RENAME TO outbox;
+
+      CREATE INDEX IF NOT EXISTS idx_outbox_ready ON outbox(band_state, queued_at);
+      -- One queued vote per card, enforced by the schema rather than by
+      -- the caller remembering.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_outbox_one_vote
+        ON outbox(card_id) WHERE kind = 'VOTE' AND card_id IS NOT NULL;
+
+      -- Survives the drain. Without it, deleting a sent row erases the
+      -- only evidence that a card already contributed, and a later
+      -- revision enqueues a second vote for the same card.
+      CREATE TABLE IF NOT EXISTS vote_sent (
+        card_id TEXT PRIMARY KEY,
+        sent_at TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 const SCHEMA_TABLE = `

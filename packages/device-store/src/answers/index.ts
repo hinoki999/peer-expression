@@ -111,5 +111,5 @@ export function findDeltas(db: Db): Delta[] {
 
 /** Erasure. Local history, and therefore the Flirtprint, simply ceases. */
 export function wipe(db: Db): void {
-  db.exec('DELETE FROM answer_local; DELETE FROM delta_shown; DELETE FROM outbox; DELETE FROM streak;');
+  db.exec('DELETE FROM answer_local; DELETE FROM delta_shown; DELETE FROM outbox; DELETE FROM vote_sent; DELETE FROM streak;');
 }
