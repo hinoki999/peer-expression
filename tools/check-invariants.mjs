@@ -331,9 +331,22 @@ for (const cls of ENFORCEMENT_CLASSES) {
   }
 }
 
-writeFileSync(join(ROOT, 'docs/enforcement-map.md'), lines.join('\n'));
+/**
+ * Only on a clean run.
+ *
+ * A failing gate has, by definition, read a registry it does not accept.
+ * Writing the map anyway leaves a committed artifact describing code that
+ * did not pass — which is the exact failure this file was added to stop.
+ * It was also a real bug: the first committed map was generated during a
+ * deliberately-broken run and silently omitted I15.
+ */
 console.log('');
-console.log('  wrote docs/enforcement-map.md');
+if (failures.length) {
+  console.log('  \x1b[33mgate failed — docs/enforcement-map.md left untouched\x1b[0m');
+} else {
+  writeFileSync(join(ROOT, 'docs/enforcement-map.md'), lines.join('\n'));
+  console.log('  wrote docs/enforcement-map.md');
+}
 
 console.log('');
 if (failures.length) {

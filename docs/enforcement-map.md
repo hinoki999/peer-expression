@@ -233,6 +233,15 @@ it does not deliver it.
 - **residual** — a field absent from a type is not a field absent from a runtime response; the binding must validate
 - **source** — doc 13 v2
 
+### I15 — in place
+
+> Cohorts predetermined; no arbitrary slicing
+
+- **owner** — Caitie
+- **CI asserts** — PublicationScope is a closed union of the known bands plus the one global scope
+- **residual** — a server could still compute an unlisted slice internally; the union constrains what our code can name
+- **source** — doc 15 Part C
+
 ### I16 — in place
 
 > Local history is append-only; a revision inserts and never overwrites
