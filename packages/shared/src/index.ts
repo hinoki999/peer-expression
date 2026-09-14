@@ -3,6 +3,7 @@ export * from './taxonomy/cohorts.ts';
 export * from './taxonomy/redlines.ts';
 export * from './taxonomy/emoji.ts';
 export * from './taxonomy/sources.ts';
+export * from './taxonomy/rules.ts';
 export * from './constants/thresholds.ts';
 export * from './model/index.ts';
 export * from './contracts/index.ts';

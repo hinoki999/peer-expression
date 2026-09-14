@@ -46,6 +46,38 @@ const COPY = ['packages', 'apps', 'tools', 'db', 'docs'];
  * say. Matching on the id as well as the exit code matters — a gate that
  * fails for an unrelated reason has not validated anything.
  */
+/**
+ * Card fixtures for the content cases. Written out rather than generated
+ * so a reader can see exactly which rule each one fails.
+ */
+const ALL_RULES = ['R_person_subject','R_harm_solicitation','R_harm_normalization','R_sexual_activity','R_appearance_rating','R_body_commentary','R_identifying_detail','R_meetup_coordination','R_private_media','R_substance','R_dating_platform','R_adult_setting','R_romantic_escalation'];
+
+const baseCard = (over) => ({
+  cardId: 'mutation', subjectType: 'SELF', frameId: 'f', body: 'x',
+  voiceLine: null,
+  cohortBands: ['B13_15'],
+  restrictionsCleared: ALL_RULES,
+  reviewRecord: { disposition: 'APPROVE', reviewer: 'Atlas', reviewedAt: '2026-09-14', rulesVersion: 2 },
+  options: [
+    { optionId: 'a', label: 'yes', glyph: null, spokenForm: 'yes', ordinal: 0 },
+    { optionId: 'b', label: 'no', glyph: null, spokenForm: 'no', ordinal: 1 },
+  ],
+  ...over,
+});
+
+/** Claims 13-15 but has not cleared the 13-15-only rule. */
+const CARD_UNDERCLEARED = baseCard({
+  restrictionsCleared: ALL_RULES.filter((r) => r !== 'R_romantic_escalation'),
+});
+
+/** Nobody decided about it. */
+const CARD_NO_RECORD = baseCard({ reviewRecord: null });
+
+/** Reviewed, but against a vocabulary that has since changed. */
+const CARD_STALE_RULES = baseCard({
+  reviewRecord: { disposition: 'APPROVE', reviewer: 'Atlas', reviewedAt: '2026-09-01', rulesVersion: 1 },
+});
+
 const CASES = [
   {
     ids: ['CL5'],
@@ -60,6 +92,40 @@ const CASES = [
     file: 'apps/mobile/src/state/mock.ts',
     remove: true,
     expect: /CL6|registered card source is missing/,
+  },
+  {
+    ids: ['CL1a'],
+    what: 'the conservatism ladder broken',
+    file: 'packages/shared/src/taxonomy/rules.ts',
+    edit: (s) => s.replace(
+      /const B13_15_EXTRA: readonly RuleId\[\] = \['R_romantic_escalation'\];/,
+      "const B13_15_EXTRA: readonly RuleId[] = [];\nconst _unused: readonly RuleId[] = ['R_romantic_escalation'];",
+    ).replace(
+      /B16_17: \[\.\.\.PRODUCT_WIDE, \.\.\.UNDER_18_EXTRA\],/,
+      'B16_17: [...PRODUCT_WIDE, ...UNDER_18_EXTRA, ..._unused],',
+    ),
+    expect: /CL1a|ladder is broken/,
+  },
+  {
+    ids: ['CL1b'],
+    what: 'a card declaring a band whose rules it does not clear',
+    file: 'db/seed/cards/_mutation.json',
+    create: JSON.stringify([CARD_UNDERCLEARED], null, 2),
+    expect: /CL1b|does not clear/,
+  },
+  {
+    ids: ['CL7'],
+    what: 'a card with no review record',
+    file: 'db/seed/cards/_mutation.json',
+    create: JSON.stringify([CARD_NO_RECORD], null, 2),
+    expect: /CL7|no reviewRecord/,
+  },
+  {
+    ids: ['CL7'],
+    what: 'a review record against a superseded rule version',
+    file: 'db/seed/cards/_mutation.json',
+    create: JSON.stringify([CARD_STALE_RULES], null, 2),
+    expect: /CL7|re-review required/,
   },
   {
     ids: ['CL3'],

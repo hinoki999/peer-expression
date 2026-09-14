@@ -17,6 +17,10 @@ const cards: Card[] = [
     body: 'What does 👀 mean when someone sends it?',
     voiceLine: 'apparently none of us can function',
     cohortBands: ['B16_17'],
+    // Development fixture — not OWN 2 reviewed, so nothing is claimed
+    // as cleared and there is no record. See CARD_LIBRARY_SOURCES.
+    restrictionsCleared: [],
+    reviewRecord: null,
     origin: 'TEAM',
     entropyScore: null,
     publishedAt: '2026-09-01T00:00:00.000Z',
@@ -29,6 +33,10 @@ const cards: Card[] = [
     body: 'When I like someone, I send them irrelevant TikToks instead of saying anything.',
     voiceLine: 'communication is dead and we killed it',
     cohortBands: ['B16_17'],
+    // Development fixture — not OWN 2 reviewed, so nothing is claimed
+    // as cleared and there is no record. See CARD_LIBRARY_SOURCES.
+    restrictionsCleared: [],
+    reviewRecord: null,
     origin: 'TEAM',
     entropyScore: null,
     publishedAt: '2026-09-01T00:00:00.000Z',
@@ -41,6 +49,10 @@ const cards: Card[] = [
     body: "What's worse — left on delivered, or left on read?",
     voiceLine: null,
     cohortBands: ['B16_17'],
+    // Development fixture — not OWN 2 reviewed, so nothing is claimed
+    // as cleared and there is no record. See CARD_LIBRARY_SOURCES.
+    restrictionsCleared: [],
+    reviewRecord: null,
     origin: 'TEAM',
     entropyScore: null,
     publishedAt: '2026-09-01T00:00:00.000Z',

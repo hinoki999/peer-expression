@@ -9,7 +9,7 @@ Per doc 32: a CI check is not an enforcement point. An invariant can
 carry a check and still be unenforced — the check supports the guarantee,
 it does not deliver it.
 
-`36` specified · `13` enforcement points built · `19` CI checks · `7` end-to-end validated
+`39` specified · `16` enforcement points built · `22` CI checks · `10` end-to-end validated
 
 ## client-affordance
 
@@ -572,6 +572,57 @@ it does not deliver it.
 - **validated by** — tools/test-gate.mjs removes a registered source and requires the gate to fail rather than quietly scanning less
 - **residual** — NOT assertable: that the registry is complete. Nothing can prove a fourth card universe does not exist somewhere unregistered. Doc 33 names the destination \u2014 one authoritative card schema in packages/shared that both seeds and mocks instantiate, so coverage becomes a property of the type rather than a list to maintain.
 - **source** — doc 33 CL6
+
+### CL1a — in place
+
+> The band rule sets form a chain — every rule a looser band requires, a stricter band also requires
+
+| | |
+|---|---|
+| specified | yes |
+| enforcement point built | yes |
+| CI / review check exists | yes |
+| end-to-end validated | yes |
+
+- **owner** — Caitie
+- **CI asserts** — BAND_SAFETY_RULES is walked strictest-first and any rule required by a looser band but not a stricter one fails the build
+- **validated by** — tools/test-gate.mjs breaks the chain and requires the gate to fail
+- **residual** — true by construction — the sets are derived unions (doc 33 s2.4), so this is a regression test against someone later flattening them into three literals, not the thing holding the property up.
+- **source** — doc 33 CL1a
+
+### CL1b — in place
+
+> A card clears every safety rule required by each band it declares
+
+| | |
+|---|---|
+| specified | yes |
+| enforcement point built | yes |
+| CI / review check exists | yes |
+| end-to-end validated | yes |
+
+- **owner** — Caitie
+- **CI asserts** — for every declared band, BAND_SAFETY_RULES[band] minus card.restrictionsCleared must be empty, over review-gated sources
+- **validated by** — tools/test-gate.mjs seeds a card declaring a band whose rules it does not clear and requires the gate to fail
+- **residual** — THE WHOLE GUARANTEE REDUCES TO CL1c, which is Atlas’s (doc 33). This compares tags; nothing here can tell whether a card tagged as clearing R_substance actually avoids substance references. The comparison is deliberately asked as what the BAND requires \u2014 the reverse direction passes trivially for a card with no tags, since the empty set is a subset of everything.
+- **source** — doc 33 CL1b
+
+### CL7 — in place
+
+> Every card in the authoritative library carries an APPROVE review record made against the current rule version
+
+| | |
+|---|---|
+| specified | yes |
+| enforcement point built | yes |
+| CI / review check exists | yes |
+| end-to-end validated | yes |
+
+- **owner** — Caitie (the check) \u2014 the decision is Atlas (OWN 2)
+- **CI asserts** — over review-gated sources: a card with no reviewRecord, a disposition other than APPROVE, a missing reviewer or date, or a rulesVersion other than the current one fails the build
+- **validated by** — tools/test-gate.mjs seeds a card with no record, and separately one with a stale rulesVersion, and requires the gate to fail on each
+- **residual** — the gate cannot decide whether a card is safe; it refuses a card nobody decided about. Development fixtures are not review-gated \u2014 a scope call stated in CARD_LIBRARY_SOURCES, and the residual there is that a team build does put unreviewed mock cards in front of a person.
+- **source** — doc 33 CL7
 
 ## human-process
 

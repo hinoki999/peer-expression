@@ -20,6 +20,9 @@ import {
   SUPPORTED_EMOJI_SEQUENCES, extractEmojiSequences, describeSequence,
 } from '../packages/shared/src/taxonomy/emoji.ts';
 import { CARD_LIBRARY_SOURCES } from '../packages/shared/src/taxonomy/sources.ts';
+import {
+  BAND_SAFETY_RULES, LADDER, RULES_VERSION, isRuleId, missingRulesFor,
+} from '../packages/shared/src/taxonomy/rules.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -46,7 +49,51 @@ function checkEmoji(file, id, where, text) {
   }
 }
 
-function validate(file, card) {
+/**
+ * CL1a — the ladder. Doc 33 §2.4 builds the sets as derived unions, so
+ * this should be true by construction; it is checked anyway, because the
+ * next person to touch that file might flatten them into three literals
+ * and the property would quietly stop holding.
+ *
+ * Strictest first: every rule a looser band requires must also be
+ * required by every stricter band.
+ */
+function checkLadder() {
+  for (let i = 0; i < LADDER.length - 1; i++) {
+    const stricter = LADDER[i];
+    const looser = LADDER[i + 1];
+    const gap = BAND_SAFETY_RULES[looser].filter(
+      (r) => !BAND_SAFETY_RULES[stricter].includes(r),
+    );
+    if (gap.length) {
+      note('BAND_SAFETY_RULES', '', `${stricter} does not require ${gap.join(', ')} but ${looser} does — the ladder is broken, CL1a`);
+    }
+  }
+}
+
+/**
+ * CL7 — a card nobody decided about does not ship.
+ *
+ * This does not judge whether the decision was right. It requires that
+ * one was made, by someone, against a stated version of the rules.
+ */
+function checkReviewRecord(file, id, card) {
+  const r = card.reviewRecord;
+  if (!r) {
+    note(file, id, 'no reviewRecord — unreviewed cards are not eligible, CL7');
+    return;
+  }
+  if (r.disposition !== 'APPROVE') {
+    note(file, id, `reviewRecord disposition is ${r.disposition} — only APPROVE is eligible, CL7`);
+  }
+  if (!r.reviewer) note(file, id, 'reviewRecord names no reviewer — CL7');
+  if (!r.reviewedAt) note(file, id, 'reviewRecord has no reviewedAt — CL7');
+  if (r.rulesVersion !== RULES_VERSION) {
+    note(file, id, `reviewRecord is against rules v${r.rulesVersion}, current is v${RULES_VERSION} — re-review required, CL7`);
+  }
+}
+
+function validate(file, card, source) {
   const id = card.cardId ?? '?';
   if (!SUBJECTS.includes(card.subjectType)) {
     note(file, id, `subjectType "${card.subjectType}" is not one of ${SUBJECTS.join(', ')} — I1`);
@@ -73,9 +120,32 @@ function validate(file, card) {
     }
   }
   if (card.redlines?.length) note(file, id, `declares redlines: ${card.redlines.join(', ')}`);
+
+  if (!source?.reviewGated) return;
+
+  // CL1b — does the card clear what each band it claims actually requires?
+  //
+  // Asked in this direction on purpose. "Is every cleared rule required?"
+  // passes trivially for a card with no tags at all, since the empty set
+  // is a subset of everything. We ask what the BAND demands.
+  const cleared = Array.isArray(card.restrictionsCleared) ? card.restrictionsCleared : [];
+  for (const tag of cleared) {
+    if (!isRuleId(tag)) note(file, id, `restrictionsCleared has unknown rule "${tag}" — CL1b`);
+  }
+  for (const band of Array.isArray(card.cohortBands) ? card.cohortBands : []) {
+    if (!BAND_SAFETY_RULES[band]) continue;
+    const missing = missingRulesFor(band, cleared);
+    if (missing.length) {
+      note(file, id, `declares ${band} but does not clear ${missing.join(', ')} — CL1b`);
+    }
+  }
+
+  checkReviewRecord(file, id, card);
 }
 
 console.log('\nTaxonomy gate\n');
+
+checkLadder();
 
 let cards = 0;
 let seedFiles = 0;
@@ -107,7 +177,7 @@ for (const src of CARD_LIBRARY_SOURCES) {
       let parsed;
       try { parsed = JSON.parse(readFileSync(join(abs, f), 'utf8')); }
       catch (e) { note(f, '', `not valid JSON: ${e.message}`); continue; }
-      for (const card of Array.isArray(parsed) ? parsed : [parsed]) { validate(f, card); cards++; }
+      for (const card of Array.isArray(parsed) ? parsed : [parsed]) { validate(f, card, src); cards++; }
     }
     console.log(`  \x1b[32m+\x1b[0m ${src.path} — ${files.length} file(s), ${cards} card(s)`);
     continue;
@@ -120,13 +190,14 @@ for (const src of CARD_LIBRARY_SOURCES) {
    * still content somebody will copy.
    */
   checkEmoji(src.path, '', 'source', stripComments(readFileSync(abs, 'utf8')));
-  console.log(`  \x1b[32m+\x1b[0m ${src.path} — scanned for emoji`);
+  console.log(`  \x1b[32m+\x1b[0m ${src.path} — emoji + bands only, not review-gated (fixture)`);
 }
 
 console.log('');
 console.log(`  sources:  ${scanned} of ${CARD_LIBRARY_SOURCES.length} registered`);
 console.log(`  cards:    ${cards} across ${seedFiles} seed file(s)`);
 console.log(`  manifest: ${SUPPORTED_EMOJI_SEQUENCES.length} permitted sequences`);
+console.log(`  rules:    v${RULES_VERSION}, ${BAND_SAFETY_RULES.B13_15.length}/${BAND_SAFETY_RULES.B16_17.length}/${BAND_SAFETY_RULES.B18_PLUS.length} for 13-15 / 16-17 / 18+`);
 console.log('');
 
 if (problems.length) {
