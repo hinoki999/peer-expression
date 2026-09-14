@@ -27,6 +27,18 @@ jobs:
         with: { node-version: 22 }
       - run: node tools/check-taxonomy.mjs
 
+  # A check that has never failed is indistinguishable from a check that
+  # cannot fail. This one breaks each guarantee on a copy of the tree and
+  # requires the gate to catch it — the fourth status in doc 33 s0.
+  gate-self-test:
+    name: Gate self-test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - run: node tools/test-gate.mjs
+
   typecheck:
     name: Typecheck
     runs-on: ubuntu-latest

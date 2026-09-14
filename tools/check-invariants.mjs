@@ -218,15 +218,41 @@ check(['I6b'], 'the database key is device-only and out of cloud backup', () => 
  * claim is that card content conforms, and only running the check
  * establishes that.
  */
-check(['I31'], 'card content uses only manifest emoji', () => {
+check(['CL3', 'CL5', 'CL6'], 'card content: bands declared, emoji in the manifest, every source scanned', () => {
   try {
     execFileSync(process.execPath, [join(ROOT, 'tools/check-taxonomy.mjs')], { stdio: 'pipe' });
     return null;
   } catch (e) {
     const out = `${e.stdout ?? ''}${e.stderr ?? ''}`;
-    const first = out.split('\n').find((l) => l.includes('I31')) ?? 'taxonomy gate failed';
+    const first = out.split('\n').find((l) => /CL\d/.test(l)) ?? 'taxonomy gate failed';
     return first.trim().replace(/^\s*-\s*/, '');
   }
+});
+
+/**
+ * Doc 03's product-language rule, 2026-09-14. Not a registered invariant
+ * — it is a copy rule — but mechanical enough to be worth a guard, and
+ * we already shipped a violation: every band label read "people your
+ * age" until this landed.
+ *
+ * We measure a platform-declared range, not chronological age. Cells are
+ * mixed at both boundaries by declaration lag, so any copy claiming the
+ * group shares the reader's age is asserting something the age signal
+ * cannot support.
+ */
+check([], 'no user-facing copy claims chronological age', () => {
+  const banned = [
+    [/people your age/i, '"people your age"'],
+    [/year[- ]olds?/i, '"year-olds"'],
+    [/\b1[3-8]\s*[-\u2013]\s*1[3-9]\s*year/i, 'an age range followed by "year"'],
+    [/same age as you/i, '"same age as you"'],
+  ];
+  const hits = [];
+  for (const f of [...walk('packages'), ...walk('apps')]) {
+    const src = code(f);
+    for (const [re, label] of banned) if (re.test(src)) hits.push(`${label} in ${f}`);
+  }
+  return hits.length ? `${hits.join('; ')} — doc 03 product language` : null;
 });
 
 // ---- structural sweep: objects the architecture forbids outright ----
@@ -248,7 +274,7 @@ console.log('');
 const reg = read('packages/shared/src/invariants/registry.ts');
 
 /** Split the registry into one blob per entry so fields can't leak across. */
-const entries = [...reg.matchAll(/\{\s*id:\s*'(I\d+[a-z]?)'([\s\S]*?)(?=\n\n  \{ id:|\n\];)/g)]
+const entries = [...reg.matchAll(/\{\s*id:\s*'((?:I|CL)\d+[a-z]?)'([\s\S]*?)(?=\n\n  \{ id:|\n\];)/g)]
   .map((m) => ({ id: m[1], body: m[2] }));
 
 const registered = entries.map((e) => e.id);
@@ -262,6 +288,24 @@ const ENFORCEMENT_CLASSES = [
 
 const pending = new Set(entries.filter((e) => field(e, 'pending')).map((e) => e.id));
 const ciCovered = new Set(entries.filter((e) => field(e, 'ciScope')).map((e) => e.id));
+const validated = new Set(entries.filter((e) => field(e, 'validated')).map((e) => e.id));
+
+/**
+ * END_TO_END_VALIDATED is the status most easily faked, so it is checked
+ * against evidence rather than taken on the registry's word: the id must
+ * appear in a real case in the self-test. A claim with no case behind it
+ * is the same class of error as a CI check described as a control.
+ */
+const selfTest = read('tools/test-gate.mjs');
+const casedIds = new Set(
+  [...selfTest.matchAll(/ids:\s*\[([^\]]*)\]/g)]
+    .flatMap((m) => [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1])),
+);
+for (const id of validated) {
+  if (!casedIds.has(id)) {
+    failures.push(`${id} claims END_TO_END_VALIDATED but tools/test-gate.mjs has no case for it`);
+  }
+}
 
 const dupes = registered.filter((id, i) => registered.indexOf(id) !== i);
 if (dupes.length) failures.push(`registry lists ${[...new Set(dupes)].join(', ')} more than once`);
@@ -299,10 +343,10 @@ for (const e of entries) {
 
 const held = registered.filter((id) => !pending.has(id));
 
-console.log(`  enforcement point exists: ${held.length}`);
-console.log(`  CI check registered:      ${ciCovered.size}`);
-console.log(`  pending:                  ${pending.size}`);
-console.log(`  registered:               ${registered.length}`);
+console.log(`  SPECIFIED                 ${registered.length}`);
+console.log(`  ENFORCEMENT_POINT_BUILT   ${held.length}`);
+console.log(`  CI_CHECK_EXISTS           ${ciCovered.size}`);
+console.log(`  END_TO_END_VALIDATED      ${validated.size}`);
 
 const supporting = [...ciCovered].filter((id) => pending.has(id));
 if (supporting.length) {
@@ -359,8 +403,8 @@ const lines = [
   'carry a check and still be unenforced — the check supports the guarantee,',
   'it does not deliver it.',
   '',
-  `\`${held.length}\` enforcement points exist · \`${ciCovered.size}\` CI checks · `
-    + `\`${pending.size}\` pending · \`${registered.length}\` registered`,
+  `\`${registered.length}\` specified · \`${held.length}\` enforcement points built · `
+    + `\`${ciCovered.size}\` CI checks · \`${validated.size}\` end-to-end validated`,
   '',
 ];
 
@@ -370,11 +414,18 @@ for (const cls of ENFORCEMENT_CLASSES) {
   lines.push(`## ${cls}`, '');
   for (const e of group) {
     const isPending = pending.has(e.id);
+    const tick = (b) => (b ? 'yes' : '**no**');
     lines.push(`### ${e.id} — ${isPending ? '**NOT BUILT**' : 'in place'}`, '');
     lines.push(`> ${str(e, 'statement')}`, '');
+    lines.push('| | |', '|---|---|');
+    lines.push(`| specified | yes |`);
+    lines.push(`| enforcement point built | ${tick(!isPending)}${isPending ? ` — ${str(e, 'pending')}` : ''} |`);
+    lines.push(`| CI / review check exists | ${tick(ciCovered.has(e.id))} |`);
+    lines.push(`| end-to-end validated | ${tick(validated.has(e.id))} |`);
+    lines.push('');
     lines.push(`- **owner** — ${str(e, 'owner')}`);
-    if (isPending) lines.push(`- **not built** — ${str(e, 'pending')}`);
     lines.push(`- **CI asserts** — ${ciCovered.has(e.id) ? str(e, 'ciScope') : '_nothing_'}`);
+    if (validated.has(e.id)) lines.push(`- **validated by** — ${str(e, 'validated')}`);
     if (field(e, 'residual')) lines.push(`- **residual** — ${str(e, 'residual')}`);
     lines.push(`- **source** — ${str(e, 'source')}`);
     lines.push('');

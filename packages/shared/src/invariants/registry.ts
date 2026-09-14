@@ -43,6 +43,23 @@ export type Enforcement =
   /** A person does it. Names an owner, or says unowned. */
   | 'human-process';
 
+/**
+ * Doc 33 s0 / doc 03. Two statuses were not enough.
+ *
+ * The enforcement map already separated "a check exists" from "the
+ * control exists". The mirror case needs saying too: a control can exist
+ * while the documentation describing its scope is wrong. And a check can
+ * pass forever without anyone confirming it would actually fail.
+ *
+ *   SPECIFIED               the property is written down precisely
+ *   ENFORCEMENT_POINT_BUILT the component that would reject a violation exists
+ *   CI_CHECK_EXISTS         something mechanical or procedural tests it
+ *   END_TO_END_VALIDATED    a violation was attempted and refused
+ *
+ * The fourth is the one most easily faked, so it is evidence-bearing:
+ * `validated` names the reproducible attempt. A mutation I ran by hand
+ * once and did not commit does not count, because nobody can re-run it.
+ */
 export interface Invariant {
   id: string;
   statement: string;
@@ -54,6 +71,11 @@ export interface Invariant {
   ciScope?: string;
   /** What the mechanism does not cover. */
   residual?: string;
+  /**
+   * A violation was attempted and refused, reproducibly. Names how.
+   * Absent means nobody has tried — which is the honest default.
+   */
+  validated?: string;
   test: string;
   source: string;
   /** The enforcement point does not exist yet. Must carry a reason. */
@@ -104,6 +126,7 @@ export const INVARIANTS: readonly Invariant[] = [
     enforcement:'ci-assertion', owner:'Caitie',
     ciScope:'the keystore adapter passes WHEN_UNLOCKED_THIS_DEVICE_ONLY on every call and no other accessibility value, and app.config.ts sets android.allowBackup false',
     residual:'asserts the configuration, not the platform behaviour. That iOS honours device-only for Keychain items, and that Android excludes the app from Google Backup, are Apple and Google guarantees — verified by restoring a backup onto a second device, a human process nobody has run. allowBackup is app-wide, so an unrelated config change can silently drop it; this check is what makes that loud.',
+    validated:'tools/test-gate.mjs loosens the keychain accessibility, and separately removes android.allowBackup, and requires the gate to fail on each',
     test:'restore a device backup onto a second device -> the key is absent',
     source:'doc 13 v2 s6, doc 14 s9' },
 
@@ -159,6 +182,7 @@ export const INVARIANTS: readonly Invariant[] = [
     enforcement:'ci-assertion', owner:'Caitie',
     ciScope:'PublicationScope is a closed union of the known bands plus the one global scope',
     residual:'a server could still compute an unlisted slice internally; the union constrains what our code can name',
+    validated:'tools/test-gate.mjs widens PublicationScope to string and requires the gate to fail',
     test:'PublicationScope is a closed union of known bands plus the one global scope', source:'doc 15 Part C' },
 
   { id:'I16', statement:'Local history is append-only; a revision inserts and never overwrites',
@@ -171,6 +195,7 @@ export const INVARIANTS: readonly Invariant[] = [
     enforcement:'client-affordance', owner:'Caitie',
     ciScope:'the outbox enforces it three ways — an enqueue guard, a unique partial index on queued votes, and a vote_sent marker that outlives the drain',
     residual:'ACCEPTED RESIDUAL (doc 32 C2). Counters accept any submission bearing a valid single-use assertion. Server-side dedup would require exactly the (account, card) ledger the architecture refuses, so a modified client can double-count and nothing server-side will stop it.',
+    validated:'tools/test-gate.mjs drops the unique index and requires the gate to fail',
     test:'a second VOTE for a queued or already-sent card is refused', source:'doc 16 F1, doc 26 S1, doc 32 C2' },
 
   { id:'I17', statement:'There is no channel between two users',
@@ -203,6 +228,7 @@ export const INVARIANTS: readonly Invariant[] = [
     enforcement:'ci-assertion', owner:'Caitie',
     ciScope:'MIN_CELL_PUBLIC and MIN_BATCH_DELTA are compared against their floors in this repo',
     residual:'a deployed service could read a threshold from configuration the gate never sees',
+    validated:'tools/test-gate.mjs sets MIN_CELL_PUBLIC below its floor and requires the gate to fail',
     test:'MIN_BATCH_DELTA < 20 or MIN_CELL_PUBLIC < 500 -> build fails', source:'doc 16 F4' },
 
   { id:'I23', statement:'No account-level score outlives the data that produced it',
@@ -244,21 +270,48 @@ export const INVARIANTS: readonly Invariant[] = [
     test:'issuer schema declares no account-to-fingerprint column', source:'doc 21 T2, doc 31 s5, doc 32',
     pending:'needs the issuer — step 14' },
 
-  { id:'I31', statement:'Card content uses only emoji sequences the manifest permits',
-    enforcement:'ci-assertion', owner:'Caitie (the gate) \u2014 manifest contents unowned with the card library (doc 08)',
-    ciScope:'every emoji sequence in a seed card body or option, and every emoji in a registered mock card source, is present in SUPPORTED_EMOJI_SEQUENCES',
-    residual:'the manifest is provisional until step 4 runs on a device. A sequence can render on the two devices tested and still fail on an OEM font neither covered \u2014 doc 06 v2 s3. The gate constrains content, it does not verify rendering.',
-    test:'a card using an unlisted sequence -> build fails', source:'doc 06 v2 s6, doc 29, doc 32' },
-
   { id:'I30', statement:'The cohort band is signed by our Integrity Authority, never accepted from the client',
     enforcement:'signed-assertion', owner:BACKEND,
     ciScope:'no contract operation accepts a client-supplied band',
     residual:'holds only once the vote gateway verifies the assertion signature AND rejects submissions whose band is absent, unsigned, or disagrees with the signed one. That step is specified nowhere (doc 32 C3). The platform does not sign the age response; we do (doc 31 s3).',
     test:'gateway rejects a vote whose band is absent, unsigned, or disagrees with the assertion', source:'doc 21 T3, doc 31, doc 32 C3',
-    pending:'the gateway’s assertion verification does not exist — doc 32 C3' },
+    pending:'the gateway\u2019s assertion verification does not exist \u2014 doc 32 C3' },
+
+  { id:'CL5', statement:'Every emoji sequence used by a card exists in the approved manifest',
+    enforcement:'ci-assertion', owner:'Caitie (the gate) \u2014 manifest contents unowned with the card library (OWN 2)',
+    ciScope:'every emoji sequence in a seed card body or option, and in every registered card source, is present in SUPPORTED_EMOJI_SEQUENCES',
+    residual:'the manifest is provisional until a card library exists. A sequence can render on the two devices step 4 tested and still fail on an OEM font neither covered (doc 06 v2 s3). The gate constrains content; it does not verify rendering.',
+    validated:'tools/test-gate.mjs puts a Unicode 14 sequence into a card source and requires the gate to fail',
+    test:'a card using an unlisted sequence -> build fails',
+    source:'doc 33 CL5, doc 06 v2 s6, doc 29' },
+
+  { id:'CL3', statement:'Every card declares its cohort bands explicitly \u2014 no implicit or default all-ages',
+    enforcement:'ci-assertion', owner:'Caitie',
+    ciScope:'Card.cohortBands is non-optional in the shared model, and the content gate rejects a card whose bands are absent or empty',
+    residual:'declaring a band is not the same as being appropriate for it \u2014 that is CL1b against authored tags, and CL1c, which no check reaches (doc 33).',
+    validated:'tools/test-gate.mjs registers a card with empty cohortBands and requires the gate to fail',
+    test:'a card with absent or empty cohortBands -> build fails',
+    source:'doc 33 CL3' },
+
+  { id:'CL6', statement:'Every card that can reach a user lives in a source the content gate scans',
+    enforcement:'ci-assertion', owner:'Caitie',
+    ciScope:'CARD_LIBRARY_SOURCES is iterated by the gate, and a registered source that is missing or unreadable fails the build',
+    residual:'NOT assertable: that the registry is complete. Nothing can prove a fourth card universe does not exist somewhere unregistered. Doc 33 names the destination \u2014 one authoritative card schema in packages/shared that both seeds and mocks instantiate, so coverage becomes a property of the type rather than a list to maintain.',
+    validated:'tools/test-gate.mjs removes a registered source and requires the gate to fail rather than quietly scanning less',
+    test:'delete a registered card source -> build fails',
+    source:'doc 33 CL6' },
+
+  { id:'I32', statement:'No TrustAssertion is issued for an age range below the minimum permitted cohort',
+    enforcement:'server-validation', owner:'unowned \u2014 backend (OWN 1)',
+    residual:'the sharp edge is the regulated-region case: a statutory range straddling the floor, such as 12\u201314, MUST NOT be mapped upward into 13\u201315. Refusal is the default and permission is the written exception. Under-13 is neither unbanded nor an invalid signature \u2014 it is a valid platform signal we deliberately refuse, which is why I22 does not cover it. Refusal happens before issuance, never at the gateway.',
+    test:'mapping policy resolves below the floor -> no assertion issued',
+    source:'doc 03 Q4/I32, doc 33',
+    pending:'the Integrity Authority does not exist. A client-side gate would be bypassable, so there is nothing honest to build here yet \u2014 OWN 1.' },
 ];
 
 export const PENDING = INVARIANTS.filter((i) => i.pending);
 export const ENFORCEABLE = INVARIANTS.filter((i) => !i.pending);
 /** Has a CI check, whether or not the enforcement point exists. */
 export const CI_COVERED = INVARIANTS.filter((i) => i.ciScope);
+/** Somebody broke it on purpose and the check caught it. */
+export const VALIDATED = INVARIANTS.filter((i) => i.validated);
