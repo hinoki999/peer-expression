@@ -29,6 +29,15 @@ export interface Card {
   subjectType: CardSubject;
   frameId: string;
   body: string;
+  /**
+   * One line of voice after the number (doc 05 s3) — "apparently none of
+   * us can function". Authored per card, never generated: it is the
+   * product's personality and the most screenshot-bait element per pixel.
+   *
+   * Nullable because a card can ship without one, and a missing line must
+   * degrade to silence rather than to a placeholder.
+   */
+  voiceLine: string | null;
   cohortBands: readonly CohortBand[];
   origin: 'TEAM' | 'MINTED';
   entropyScore: number | null;

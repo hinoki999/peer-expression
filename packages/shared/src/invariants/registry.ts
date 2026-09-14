@@ -93,11 +93,19 @@ export const INVARIANTS: readonly Invariant[] = [
     residual:'a field absent from a type is not a field absent from a runtime response; the binding must validate',
     test:'contract audit -> no operation carries answer history or a flirtprint', source:'doc 13 v2' },
 
-  { id:'I6', statement:'Local history is encrypted; its key never reaches cloud backup',
+  { id:'I6', statement:'Local history is encrypted at rest',
     enforcement:'client-affordance', owner:'Caitie',
-    residual:'the class is imprecise — encryption constrains the dishonest path too, and doc 03 has no device-control class. An adult with the passcode can still open the app (doc 14 s9).',
-    test:'inspect a device backup -> no plaintext, no key material', source:'doc 13 v2 s6',
-    pending:'needs the platform keystore — step 7b' },
+    residual:'the class is imprecise — encryption constrains the dishonest path too, and doc 03 has no device-control class. An adult with the passcode can still open the app (doc 14 s9), which is a limit of the architecture rather than a gap in it.',
+    test:'pull the database file off a device -> no readable card ids, choices or timestamps',
+    source:'doc 13 v2 s6',
+    pending:'the key lifecycle and backup exclusion are built (I6b); the cipher is not. expo-sqlite cannot encrypt, so this needs the op-sqlite/SQLCipher swap the schematic already anticipates, plus reading the file off a device — which no CI job can do.' },
+
+  { id:'I6b', statement:'The database key is held by the platform keystore and excluded from cloud backup',
+    enforcement:'ci-assertion', owner:'Caitie',
+    ciScope:'the keystore adapter passes WHEN_UNLOCKED_THIS_DEVICE_ONLY on every call and no other accessibility value, and app.config.ts sets android.allowBackup false',
+    residual:'asserts the configuration, not the platform behaviour. That iOS honours device-only for Keychain items, and that Android excludes the app from Google Backup, are Apple and Google guarantees — verified by restoring a backup onto a second device, a human process nobody has run. allowBackup is app-wide, so an unrelated config change can silently drop it; this check is what makes that loud.',
+    test:'restore a device backup onto a second device -> the key is absent',
+    source:'doc 13 v2 s6, doc 14 s9' },
 
   { id:'I7', statement:'No account receives authored content or statistics computed from another band',
     enforcement:'server-validation', owner:BACKEND,
@@ -235,6 +243,12 @@ export const INVARIANTS: readonly Invariant[] = [
     residual:'SPLIT PER DOC 32. The original wording was a universal negative over logs, backups, traces and error reports, which no CI assertion can cover. CI can assert the absence of the column; everything else is a named periodic review with an owner. App Attest and Play Integrity keys are a different class and ARE durably retained — they never cross the gateway (doc 31 s5).',
     test:'issuer schema declares no account-to-fingerprint column', source:'doc 21 T2, doc 31 s5, doc 32',
     pending:'needs the issuer — step 14' },
+
+  { id:'I31', statement:'Card content uses only emoji sequences the manifest permits',
+    enforcement:'ci-assertion', owner:'Caitie (the gate) \u2014 manifest contents unowned with the card library (doc 08)',
+    ciScope:'every emoji sequence in a seed card body or option, and every emoji in a registered mock card source, is present in SUPPORTED_EMOJI_SEQUENCES',
+    residual:'the manifest is provisional until step 4 runs on a device. A sequence can render on the two devices tested and still fail on an OEM font neither covered \u2014 doc 06 v2 s3. The gate constrains content, it does not verify rendering.',
+    test:'a card using an unlisted sequence -> build fails', source:'doc 06 v2 s6, doc 29, doc 32' },
 
   { id:'I30', statement:'The cohort band is signed by our Integrity Authority, never accepted from the client',
     enforcement:'signed-assertion', owner:BACKEND,

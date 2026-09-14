@@ -3,3 +3,5 @@ export * from './migrations/index.ts';
 export * from './answers/index.ts';
 export * from './flirtprint/index.ts';
 export * from './outbox/index.ts';
+export * from './crypto/index.ts';
+export * from './erase/index.ts';

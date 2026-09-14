@@ -13,6 +13,7 @@
 import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { execFileSync } from 'node:child_process';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -177,6 +178,55 @@ check(['I30'], 'band travels in the signed assertion only', () => {
   const loose = ['cohortBand', 'scope', 'band'].filter((f) => new RegExp(`^\\s*${f}[?]?:`, 'm').test(b));
   if (loose.length) return `loose field(s): ${loose.join(', ')}`;
   return b.includes('assertion') ? null : 'no assertion on VoteSubmission';
+});
+
+/**
+ * I6b is two settings in two files, and both are the kind of line that
+ * disappears in an unrelated refactor. The key being excluded from cloud
+ * backup is the clause doc 13 s6 calls out by name, because without it
+ * hardware-backed storage is theatre — the backup carries the key
+ * off-device and anyone who can restore it can read the history.
+ *
+ * What this asserts is the configuration. Whether Apple and Google honour
+ * it is their guarantee, checked by restoring a backup onto a second
+ * device, which is a human process and is recorded as one.
+ */
+check(['I6b'], 'the database key is device-only and out of cloud backup', () => {
+  const bust = [];
+
+  const ks = code('apps/mobile/src/store/secureKeyStore.ts');
+  const uses = [...ks.matchAll(/keychainAccessible:\s*SecureStore\.([A-Z_]+)/g)].map((m) => m[1]);
+  if (uses.length < 3) {
+    bust.push(`keychainAccessible set on ${uses.length} of 3 keystore operations`);
+  }
+  const wrong = uses.filter((u) => u !== 'WHEN_UNLOCKED_THIS_DEVICE_ONLY');
+  if (wrong.length) bust.push(`accessibility ${[...new Set(wrong)].join(', ')} is not device-only`);
+
+  const cfg = code('apps/mobile/app.config.ts');
+  if (!/allowBackup:\s*false/.test(cfg)) {
+    bust.push('android.allowBackup is not false — Google Backup would carry the key off-device');
+  }
+
+  return bust.length ? bust.join('; ') : null;
+});
+
+/**
+ * I31 is enforced by a different job, so this does not scan source for a
+ * shape that implies enforcement — it runs the taxonomy gate and requires
+ * it to pass. Reading check-taxonomy.mjs to confirm it *looks* like it
+ * checks the manifest would be the scope promotion doc 32 is about: the
+ * claim is that card content conforms, and only running the check
+ * establishes that.
+ */
+check(['I31'], 'card content uses only manifest emoji', () => {
+  try {
+    execFileSync(process.execPath, [join(ROOT, 'tools/check-taxonomy.mjs')], { stdio: 'pipe' });
+    return null;
+  } catch (e) {
+    const out = `${e.stdout ?? ''}${e.stderr ?? ''}`;
+    const first = out.split('\n').find((l) => l.includes('I31')) ?? 'taxonomy gate failed';
+    return first.trim().replace(/^\s*-\s*/, '');
+  }
 });
 
 // ---- structural sweep: objects the architecture forbids outright ----

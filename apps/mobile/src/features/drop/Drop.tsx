@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import * as Haptics from 'expo-haptics';
 import type { Card, CardOption, PublishedStatistic } from '@pe/shared';
 import { RevealRow } from '../reveal/Reveal';
+import { VoiceLine } from '../reveal/VoiceLine';
 import { api, DEMO_DROP_DATE } from '../../state/mock';
 import { beat, color, space, type } from '../../design/tokens';
 
@@ -131,6 +132,8 @@ export function Drop() {
           );
         })}
       </View>
+
+      <VoiceLine line={card.voiceLine} revealed={phase === 'revealed'} />
 
       {phase === 'revealed' && !stat ? (
         <Text style={styles.forming}>

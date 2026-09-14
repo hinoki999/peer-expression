@@ -9,18 +9,18 @@ Per doc 32: a CI check is not an enforcement point. An invariant can
 carry a check and still be unenforced — the check supports the guarantee,
 it does not deliver it.
 
-`9` enforcement points exist · `15` CI checks · `22` pending · `31` registered
+`11` enforcement points exist · `17` CI checks · `22` pending · `33` registered
 
 ## client-affordance
 
 ### I6 — **NOT BUILT**
 
-> Local history is encrypted; its key never reaches cloud backup
+> Local history is encrypted at rest
 
 - **owner** — Caitie
-- **not built** — needs the platform keystore — step 7b
+- **not built** — the key lifecycle and backup exclusion are built (I6b); the cipher is not. expo-sqlite cannot encrypt, so this needs the op-sqlite/SQLCipher swap the schematic already anticipates, plus reading the file off a device — which no CI job can do.
 - **CI asserts** — _nothing_
-- **residual** — the class is imprecise — encryption constrains the dishonest path too, and doc 03 has no device-control class. An adult with the passcode can still open the app (doc 14 s9).
+- **residual** — the class is imprecise — encryption constrains the dishonest path too, and doc 03 has no device-control class. An adult with the passcode can still open the app (doc 14 s9), which is a limit of the architecture rather than a gap in it.
 - **source** — doc 13 v2 s6
 
 ### I16b — in place
@@ -233,6 +233,15 @@ it does not deliver it.
 - **residual** — a field absent from a type is not a field absent from a runtime response; the binding must validate
 - **source** — doc 13 v2
 
+### I6b — in place
+
+> The database key is held by the platform keystore and excluded from cloud backup
+
+- **owner** — Caitie
+- **CI asserts** — the keystore adapter passes WHEN_UNLOCKED_THIS_DEVICE_ONLY on every call and no other accessibility value, and app.config.ts sets android.allowBackup false
+- **residual** — asserts the configuration, not the platform behaviour. That iOS honours device-only for Keychain items, and that Android excludes the app from Google Backup, are Apple and Google guarantees — verified by restoring a backup onto a second device, a human process nobody has run. allowBackup is app-wide, so an unrelated config change can silently drop it; this check is what makes that loud.
+- **source** — doc 13 v2 s6, doc 14 s9
+
 ### I15 — in place
 
 > Cohorts predetermined; no arbitrary slicing
@@ -296,6 +305,15 @@ it does not deliver it.
 - **CI asserts** — _nothing_
 - **residual** — SPLIT PER DOC 32. The original wording was a universal negative over logs, backups, traces and error reports, which no CI assertion can cover. CI can assert the absence of the column; everything else is a named periodic review with an owner. App Attest and Play Integrity keys are a different class and ARE durably retained — they never cross the gateway (doc 31 s5).
 - **source** — doc 21 T2, doc 31 s5, doc 32
+
+### I31 — in place
+
+> Card content uses only emoji sequences the manifest permits
+
+- **owner** — Caitie (the gate) \u2014 manifest contents unowned with the card library (doc 08)
+- **CI asserts** — every emoji sequence in a seed card body or option, and every emoji in a registered mock card source, is present in SUPPORTED_EMOJI_SEQUENCES
+- **residual** — the manifest is provisional until step 4 runs on a device. A sequence can render on the two devices tested and still fail on an OEM font neither covered \u2014 doc 06 v2 s3. The gate constrains content, it does not verify rendering.
+- **source** — doc 06 v2 s6, doc 29, doc 32
 
 ## human-process
 
