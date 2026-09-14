@@ -19,12 +19,9 @@ import { fileURLToPath } from 'node:url';
 import {
   SUPPORTED_EMOJI_SEQUENCES, extractEmojiSequences, describeSequence,
 } from '../packages/shared/src/taxonomy/emoji.ts';
+import { CARD_LIBRARY_SOURCES } from '../packages/shared/src/taxonomy/sources.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
-const SEEDS = join(ROOT, 'db/seed/cards');
-
-/** Card content that is not a seed file. Every entry gets emoji-checked. */
-const MOCK_SOURCES = ['apps/mobile/src/state/mock.ts'];
 
 const SUBJECTS = ['SELF', 'SYMBOL', 'HYPOTHETICAL', 'AGGREGATE'];
 const BANDS = ['B13_15', 'B16_17', 'B18_PLUS'];
@@ -54,8 +51,11 @@ function validate(file, card) {
   if (!SUBJECTS.includes(card.subjectType)) {
     note(file, id, `subjectType "${card.subjectType}" is not one of ${SUBJECTS.join(', ')} — I1`);
   }
+  // CL3. An absent or empty band list is not "all ages" — it is a card
+  // nobody decided about, and a set comparison against an empty set
+  // passes trivially, which is what would make CL1b meaningless.
   if (!Array.isArray(card.cohortBands) || card.cohortBands.length === 0) {
-    note(file, id, 'no cohortBands');
+    note(file, id, 'cohortBands absent or empty — CL3 forbids an implicit default');
   } else {
     for (const b of card.cohortBands) if (!BANDS.includes(b)) note(file, id, `unknown band "${b}"`);
   }
@@ -79,35 +79,54 @@ console.log('\nTaxonomy gate\n');
 
 let cards = 0;
 let seedFiles = 0;
-
-if (existsSync(SEEDS)) {
-  const files = readdirSync(SEEDS).filter((f) => extname(f) === '.json');
-  seedFiles = files.length;
-  for (const f of files) {
-    let parsed;
-    try { parsed = JSON.parse(readFileSync(join(SEEDS, f), 'utf8')); }
-    catch (e) { note(f, '', `not valid JSON: ${e.message}`); continue; }
-    for (const card of Array.isArray(parsed) ? parsed : [parsed]) { validate(f, card); cards++; }
-  }
-}
+let scanned = 0;
 
 /**
- * Mock cards are TypeScript, so there is no structure to walk. Every
- * emoji in the file is checked instead — broader than the seed rule, and
- * deliberately so: breadth is the right default where precision is not
- * available, and a mock card is still content someone will copy.
+ * Iterate the registry, never a hardcoded path. CL6: a registered source
+ * that has gone missing fails the build rather than quietly reducing what
+ * gets checked — which is the exact shape of the bug this replaced.
  */
-let mockScanned = 0;
-for (const rel of MOCK_SOURCES) {
-  const p = join(ROOT, rel);
-  if (!existsSync(p)) continue;
-  mockScanned++;
-  checkEmoji(rel, '', 'source', stripComments(readFileSync(p, 'utf8')));
+for (const src of CARD_LIBRARY_SOURCES) {
+  const abs = join(ROOT, src.path);
+
+  if (!existsSync(abs)) {
+    if (src.optional) {
+      console.log(`  \x1b[33m-\x1b[0m ${src.path} — not present yet (declared optional)`);
+      continue;
+    }
+    note(src.path, '', 'registered card source is missing — CL6. Remove it from CARD_LIBRARY_SOURCES deliberately, or restore it.');
+    continue;
+  }
+
+  scanned++;
+
+  if (src.kind === 'seed-directory') {
+    const files = readdirSync(abs).filter((f) => extname(f) === '.json');
+    seedFiles += files.length;
+    for (const f of files) {
+      let parsed;
+      try { parsed = JSON.parse(readFileSync(join(abs, f), 'utf8')); }
+      catch (e) { note(f, '', `not valid JSON: ${e.message}`); continue; }
+      for (const card of Array.isArray(parsed) ? parsed : [parsed]) { validate(f, card); cards++; }
+    }
+    console.log(`  \x1b[32m+\x1b[0m ${src.path} — ${files.length} file(s), ${cards} card(s)`);
+    continue;
+  }
+
+  /**
+   * A module has no structure to walk, so every emoji in it is checked
+   * instead — broader than the per-card rule, deliberately. Breadth is
+   * the right default where precision is unavailable, and a mock card is
+   * still content somebody will copy.
+   */
+  checkEmoji(src.path, '', 'source', stripComments(readFileSync(abs, 'utf8')));
+  console.log(`  \x1b[32m+\x1b[0m ${src.path} — scanned for emoji`);
 }
 
-console.log(`  seed cards:   ${cards} across ${seedFiles} file(s)`);
-console.log(`  mock sources: ${mockScanned} scanned`);
-console.log(`  manifest:     ${SUPPORTED_EMOJI_SEQUENCES.length} permitted sequences`);
+console.log('');
+console.log(`  sources:  ${scanned} of ${CARD_LIBRARY_SOURCES.length} registered`);
+console.log(`  cards:    ${cards} across ${seedFiles} seed file(s)`);
+console.log(`  manifest: ${SUPPORTED_EMOJI_SEQUENCES.length} permitted sequences`);
 console.log('');
 
 if (problems.length) {

@@ -8,7 +8,7 @@
   "scripts": {
     "start": "pnpm --filter @pe/mobile start",
     "android": "pnpm --filter @pe/mobile android",
-    "check": "node tools/check-invariants.mjs && node tools/check-taxonomy.mjs",
+    "check": "node tools/check-invariants.mjs && node tools/check-taxonomy.mjs && node tools/test-gate.mjs",
     "build": "turbo run build",
     "test": "pnpm check && turbo run test",
     "lint": "turbo run lint",

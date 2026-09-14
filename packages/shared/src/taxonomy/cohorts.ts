@@ -18,9 +18,28 @@ export function isCohortBand(v: unknown): v is CohortBand {
 }
 
 /** Copy rule for I26: a cross-band figure is never "people your age". */
+/**
+ * What a published statistic is called on screen.
+ *
+ * Doc 03, product language, 2026-09-14: never describe a cell as
+ * "16-17-year-olds", and — the part that caught us — never imply
+ * chronological age at all. "People your age" was the previous wording
+ * and it asserts precisely the thing we cannot claim.
+ *
+ * We measure a platform-DECLARED range. Cells are mixed at both
+ * boundaries by declaration lag: a user who turned 16 can still report
+ * B13_15 for up to a declaration year, and a user who turned 18 can still
+ * sit inside B16_17 (doc 33, CL1's residual). Calling that group "people
+ * your age" is a claim about ground truth that the age signal does not
+ * support.
+ *
+ * The rule reaches Discover copy, the share card, onboarding, support
+ * macros and anything shown to a regulator — so the label lives here,
+ * once, rather than being retyped per screen.
+ */
 export const SCOPE_LABEL: Record<PublicationScope, string> = {
-  B13_15: 'people your age',
-  B16_17: 'people your age',
-  B18_PLUS: 'people your age',
+  B13_15: 'your age-range group',
+  B16_17: 'your age-range group',
+  B18_PLUS: 'your age-range group',
   GLOBAL_ONBOARDING: 'everyone on Peer Expression',
 };
