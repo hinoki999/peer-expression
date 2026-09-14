@@ -9,7 +9,7 @@ Per doc 32: a CI check is not an enforcement point. An invariant can
 carry a check and still be unenforced — the check supports the guarantee,
 it does not deliver it.
 
-`39` specified · `16` enforcement points built · `22` CI checks · `10` end-to-end validated
+`41` specified · `17` enforcement points built · `24` CI checks · `11` end-to-end validated
 
 ## client-affordance
 
@@ -624,6 +624,23 @@ it does not deliver it.
 - **residual** — the gate cannot decide whether a card is safe; it refuses a card nobody decided about. Development fixtures are not review-gated \u2014 a scope call stated in CARD_LIBRARY_SOURCES, and the residual there is that a team build does put unreviewed mock cards in front of a person.
 - **source** — doc 33 CL7
 
+### CL4a — in place
+
+> Every option carries a spoken form that is present, distinct from its siblings, and not merely the symbol’s name
+
+| | |
+|---|---|
+| specified | yes |
+| enforcement point built | yes |
+| CI / review check exists | yes |
+| end-to-end validated | yes |
+
+- **owner** — Caitie
+- **CI asserts** — a spoken form that is absent, identical to the glyph, identical to a sibling’s, or \u2014 on a bare-glyph option \u2014 a single undivided phrase, fails the build
+- **validated by** — tools/test-gate.mjs seeds a bare-glyph option whose spoken form is the Unicode name, and separately two siblings sharing one, and requires the gate to fail on each
+- **residual** — shape only. Whether the wording carries the MEANING the card is asking about is CL4 semantic and belongs to OWN 2 \u2014 doc 33 says that is the point of the invariant and no check reaches it. The two-part requirement is a PROXY I chose for doc 33’s "short identifier + intended social meaning" pattern; a good spoken form written without a separator is a false positive, which the error message tells the author how to fix.
+- **source** — doc 33 CL4, doc 34, doc 12 s12
+
 ## human-process
 
 ### I27 — **NOT BUILT**
@@ -640,3 +657,19 @@ it does not deliver it.
 - **owner** — Caitie
 - **CI asserts** — _nothing_
 - **source** — doc 20
+
+### CL2 — **NOT BUILT**
+
+> No card solicits a D7-prohibited disclosure
+
+| | |
+|---|---|
+| specified | yes |
+| enforcement point built | **no** — the queue is emitted but nothing requires a human to have worked it. CL7 requires a record exist; it cannot require the reviewer actually read the flags. |
+| CI / review check exists | yes |
+| end-to-end validated | **no** |
+
+- **owner** — Atlas (OWN 2)
+- **CI asserts** — a lexical detector emits a REVIEW QUEUE. It never fails a build, and an empty queue asserts nothing about any card.
+- **residual** — THE STANDING INVARIANT: detector output never constitutes semantic approval. Doc 33 states it separately because as the detector improves a quiet queue starts to feel like evidence of safety \u2014 it is evidence about the detector. The enforcement point is Atlas reading the card; CL7 is what makes that binding. A card that functionally invites disclosure without using a flagged term (\u201cwhat’s the worst thing that happened to you this year\u201d) is invisible here by construction. The term list is mechanism and is OWN 2’s to tune; removing a term does not make a card safe, it makes it unflagged.
+- **source** — doc 33 CL2, doc 34
