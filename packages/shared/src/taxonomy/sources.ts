@@ -29,6 +29,21 @@ export interface CardSource {
   readonly why: string;
   /** Absent until the directory exists; the gate must not fail on it. */
   readonly optional?: boolean;
+  /**
+   * Whether CL1b and CL7 apply — the per-card rule comparison and the
+   * review record.
+   *
+   * Development fixtures are `false`, and that is a scope call worth
+   * seeing rather than burying: mock cards DO render on a device, so
+   * "not library content" is a statement about who holds the build, not
+   * about reachability. The alternative was inventing review
+   * dispositions for cards Atlas never reviewed, which is the boundary
+   * doc 08 draws — his decision arriving as a code change from me.
+   *
+   * CL5 (emoji) and CL3 (bands declared) apply to every source
+   * regardless. Those need no editorial judgment.
+   */
+  readonly reviewGated: boolean;
 }
 
 export const CARD_LIBRARY_SOURCES: readonly CardSource[] = [
@@ -36,6 +51,7 @@ export const CARD_LIBRARY_SOURCES: readonly CardSource[] = [
     path: 'db/seed/cards',
     kind: 'seed-directory',
     why: 'the authored library — every card served to a real user',
+    reviewGated: true,
     // Nothing has been authored yet. Marked optional so its absence is a
     // stated fact rather than a broken build, and so CL6 still bites on
     // every other source.
@@ -45,5 +61,10 @@ export const CARD_LIBRARY_SOURCES: readonly CardSource[] = [
     path: 'apps/mobile/src/state/mock.ts',
     kind: 'module',
     why: 'renders on a device today through the mock adapter, so it is user-reachable',
+    // Development fixture. Never reviewed by OWN 2, so it carries no
+    // review record and claims no cleared rules — stating that honestly
+    // rather than fabricating either. Residual: a team build does put
+    // these in front of a person.
+    reviewGated: false,
   },
 ];

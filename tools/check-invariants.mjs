@@ -219,7 +219,7 @@ check(['I6b'], 'the database key is device-only and out of cloud backup', () => 
  * claim is that card content conforms, and only running the check
  * establishes that.
  */
-check(['CL3', 'CL5', 'CL6'], 'card content: bands declared, emoji in the manifest, every source scanned', () => {
+check(['CL1a', 'CL1b', 'CL3', 'CL5', 'CL6', 'CL7'], 'card content: the ladder, the tags, the review record, the emoji, the sources', () => {
   try {
     execFileSync(process.execPath, [join(ROOT, 'tools/check-taxonomy.mjs')], { stdio: 'pipe' });
     return null;
