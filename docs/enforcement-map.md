@@ -9,18 +9,18 @@ Per doc 32: a CI check is not an enforcement point. An invariant can
 carry a check and still be unenforced — the check supports the guarantee,
 it does not deliver it.
 
-`10` enforcement points exist · `16` CI checks · `22` pending · `32` registered
+`11` enforcement points exist · `17` CI checks · `22` pending · `33` registered
 
 ## client-affordance
 
 ### I6 — **NOT BUILT**
 
-> Local history is encrypted; its key never reaches cloud backup
+> Local history is encrypted at rest
 
 - **owner** — Caitie
-- **not built** — needs the platform keystore — step 7b
+- **not built** — the key lifecycle and backup exclusion are built (I6b); the cipher is not. expo-sqlite cannot encrypt, so this needs the op-sqlite/SQLCipher swap the schematic already anticipates, plus reading the file off a device — which no CI job can do.
 - **CI asserts** — _nothing_
-- **residual** — the class is imprecise — encryption constrains the dishonest path too, and doc 03 has no device-control class. An adult with the passcode can still open the app (doc 14 s9).
+- **residual** — the class is imprecise — encryption constrains the dishonest path too, and doc 03 has no device-control class. An adult with the passcode can still open the app (doc 14 s9), which is a limit of the architecture rather than a gap in it.
 - **source** — doc 13 v2 s6
 
 ### I16b — in place
@@ -232,6 +232,15 @@ it does not deliver it.
 - **CI asserts** — no contract operation declares a parameter or return carrying answer history or a flirtprint
 - **residual** — a field absent from a type is not a field absent from a runtime response; the binding must validate
 - **source** — doc 13 v2
+
+### I6b — in place
+
+> The database key is held by the platform keystore and excluded from cloud backup
+
+- **owner** — Caitie
+- **CI asserts** — the keystore adapter passes WHEN_UNLOCKED_THIS_DEVICE_ONLY on every call and no other accessibility value, and app.config.ts sets android.allowBackup false
+- **residual** — asserts the configuration, not the platform behaviour. That iOS honours device-only for Keychain items, and that Android excludes the app from Google Backup, are Apple and Google guarantees — verified by restoring a backup onto a second device, a human process nobody has run. allowBackup is app-wide, so an unrelated config change can silently drop it; this check is what makes that loud.
+- **source** — doc 13 v2 s6, doc 14 s9
 
 ### I15 — in place
 

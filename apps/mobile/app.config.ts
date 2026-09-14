@@ -27,7 +27,23 @@ const config: ExpoConfig = {
   userInterfaceStyle: 'dark',
   newArchEnabled: true,
   ios: { bundleIdentifier: 'com.hirulelabs.peerexpression', supportsTablet: false },
-  android: { package: 'com.hirulelabs.peerexpression' },
+  android: {
+    package: 'com.hirulelabs.peerexpression',
+    /**
+     * Android has no per-item backup exclusion, so the database key can
+     * only be kept out of Google Backup by excluding the whole app.
+     *
+     * Doc 13 s6 requires the key be excluded from cloud backup, and doc
+     * 14 s9 is the reason: a backup that carries the key off-device hands
+     * the history to anyone who can restore it. On iOS this is handled
+     * per-item by WHEN_UNLOCKED_THIS_DEVICE_ONLY; here it is app-wide.
+     *
+     * Consequence, and it is the right trade: a user restoring to a new
+     * phone starts empty. Doc 13 s6's answer to that is opt-in backup
+     * encrypted client-side under a user-held secret, which is not built.
+     */
+    allowBackup: false,
+  },
   plugins: ['expo-router'],
   experiments: { typedRoutes: true },
   extra: { eas: { projectId: EAS_PROJECT_ID } },

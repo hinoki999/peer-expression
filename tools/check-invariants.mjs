@@ -181,6 +181,36 @@ check(['I30'], 'band travels in the signed assertion only', () => {
 });
 
 /**
+ * I6b is two settings in two files, and both are the kind of line that
+ * disappears in an unrelated refactor. The key being excluded from cloud
+ * backup is the clause doc 13 s6 calls out by name, because without it
+ * hardware-backed storage is theatre — the backup carries the key
+ * off-device and anyone who can restore it can read the history.
+ *
+ * What this asserts is the configuration. Whether Apple and Google honour
+ * it is their guarantee, checked by restoring a backup onto a second
+ * device, which is a human process and is recorded as one.
+ */
+check(['I6b'], 'the database key is device-only and out of cloud backup', () => {
+  const bust = [];
+
+  const ks = code('apps/mobile/src/store/secureKeyStore.ts');
+  const uses = [...ks.matchAll(/keychainAccessible:\s*SecureStore\.([A-Z_]+)/g)].map((m) => m[1]);
+  if (uses.length < 3) {
+    bust.push(`keychainAccessible set on ${uses.length} of 3 keystore operations`);
+  }
+  const wrong = uses.filter((u) => u !== 'WHEN_UNLOCKED_THIS_DEVICE_ONLY');
+  if (wrong.length) bust.push(`accessibility ${[...new Set(wrong)].join(', ')} is not device-only`);
+
+  const cfg = code('apps/mobile/app.config.ts');
+  if (!/allowBackup:\s*false/.test(cfg)) {
+    bust.push('android.allowBackup is not false — Google Backup would carry the key off-device');
+  }
+
+  return bust.length ? bust.join('; ') : null;
+});
+
+/**
  * I31 is enforced by a different job, so this does not scan source for a
  * shape that implies enforcement — it runs the taxonomy gate and requires
  * it to pass. Reading check-taxonomy.mjs to confirm it *looks* like it
