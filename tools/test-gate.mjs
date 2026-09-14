@@ -70,6 +70,22 @@ const CARD_UNDERCLEARED = baseCard({
   restrictionsCleared: ALL_RULES.filter((r) => r !== 'R_romantic_escalation'),
 });
 
+/** A bare-glyph option whose spoken form is just the symbol's name. */
+const CARD_UNICODE_NAME = baseCard({
+  options: [
+    { optionId: 'a', label: '\u{1F62D}', glyph: '\u{1F62D}', spokenForm: 'loudly crying face', ordinal: 0 },
+    { optionId: 'b', label: 'no', glyph: null, spokenForm: 'no', ordinal: 1 },
+  ],
+});
+
+/** Two options a screen reader cannot tell apart. */
+const CARD_DUPLICATE_SPOKEN = baseCard({
+  options: [
+    { optionId: 'a', label: 'yes', glyph: null, spokenForm: 'the same thing', ordinal: 0 },
+    { optionId: 'b', label: 'no', glyph: null, spokenForm: 'The Same Thing', ordinal: 1 },
+  ],
+});
+
 /** Nobody decided about it. */
 const CARD_NO_RECORD = baseCard({ reviewRecord: null });
 
@@ -126,6 +142,20 @@ const CASES = [
     file: 'db/seed/cards/_mutation.json',
     create: JSON.stringify([CARD_STALE_RULES], null, 2),
     expect: /CL7|re-review required/,
+  },
+  {
+    ids: ['CL4a'],
+    what: 'a bare-glyph option read out as its Unicode name',
+    file: 'db/seed/cards/_mutation.json',
+    create: JSON.stringify([CARD_UNICODE_NAME], null, 2),
+    expect: /CL4|identifier \+ meaning/,
+  },
+  {
+    ids: ['CL4a'],
+    what: 'two options a screen reader cannot tell apart',
+    file: 'db/seed/cards/_mutation.json',
+    create: JSON.stringify([CARD_DUPLICATE_SPOKEN], null, 2),
+    expect: /CL4|indistinguishable/,
   },
   {
     ids: ['CL3'],

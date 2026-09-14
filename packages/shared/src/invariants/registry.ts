@@ -325,6 +325,22 @@ export const INVARIANTS: readonly Invariant[] = [
     test:'an unreviewed card -> build fails',
     source:'doc 33 CL7' },
 
+  { id:'CL4a', statement:'Every option carries a spoken form that is present, distinct from its siblings, and not merely the symbol\u2019s name',
+    enforcement:'ci-assertion', owner:'Caitie',
+    ciScope:'a spoken form that is absent, identical to the glyph, identical to a sibling\u2019s, or \u2014 on a bare-glyph option \u2014 a single undivided phrase, fails the build',
+    residual:'shape only. Whether the wording carries the MEANING the card is asking about is CL4 semantic and belongs to OWN 2 \u2014 doc 33 says that is the point of the invariant and no check reaches it. The two-part requirement is a PROXY I chose for doc 33\u2019s "short identifier + intended social meaning" pattern; a good spoken form written without a separator is a false positive, which the error message tells the author how to fix.',
+    validated:'tools/test-gate.mjs seeds a bare-glyph option whose spoken form is the Unicode name, and separately two siblings sharing one, and requires the gate to fail on each',
+    test:'a bare-glyph option reading "loudly crying face" -> build fails',
+    source:'doc 33 CL4, doc 34, doc 12 s12' },
+
+  { id:'CL2', statement:'No card solicits a D7-prohibited disclosure',
+    enforcement:'human-process', owner:'Atlas (OWN 2)',
+    ciScope:'a lexical detector emits a REVIEW QUEUE. It never fails a build, and an empty queue asserts nothing about any card.',
+    residual:'THE STANDING INVARIANT: detector output never constitutes semantic approval. Doc 33 states it separately because as the detector improves a quiet queue starts to feel like evidence of safety \u2014 it is evidence about the detector. The enforcement point is Atlas reading the card; CL7 is what makes that binding. A card that functionally invites disclosure without using a flagged term (\u201cwhat\u2019s the worst thing that happened to you this year\u201d) is invisible here by construction. The term list is mechanism and is OWN 2\u2019s to tune; removing a term does not make a card safe, it makes it unflagged.',
+    test:'a card matching a D7 pattern appears in the review queue',
+    source:'doc 33 CL2, doc 34',
+    pending:'the queue is emitted but nothing requires a human to have worked it. CL7 requires a record exist; it cannot require the reviewer actually read the flags.' },
+
   { id:'I32', statement:'No TrustAssertion is issued for an age range below the minimum permitted cohort',
     enforcement:'server-validation', owner:'unowned \u2014 backend (OWN 1)',
     residual:'the sharp edge is the regulated-region case: a statutory range straddling the floor, such as 12\u201314, MUST NOT be mapped upward into 13\u201315. Refusal is the default and permission is the written exception. Under-13 is neither unbanded nor an invalid signature \u2014 it is a valid platform signal we deliberately refuse, which is why I22 does not cover it. Refusal happens before issuance, never at the gateway.',

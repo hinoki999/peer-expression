@@ -23,6 +23,8 @@ import { CARD_LIBRARY_SOURCES } from '../packages/shared/src/taxonomy/sources.ts
 import {
   BAND_SAFETY_RULES, LADDER, RULES_VERSION, isRuleId, missingRulesFor,
 } from '../packages/shared/src/taxonomy/rules.ts';
+import { checkSpokenForms } from '../packages/shared/src/taxonomy/spoken.ts';
+import { flagCard } from '../packages/shared/src/taxonomy/detector.ts';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -34,6 +36,13 @@ const ALLOWED = new Set(SUPPORTED_EMOJI_SEQUENCES);
 
 const problems = [];
 const note = (file, id, msg) => problems.push(`${file}${id ? ` [${id}]` : ''}: ${msg}`);
+
+/**
+ * CL2 flags. Deliberately a separate list from `problems` — these never
+ * fail the build. An empty queue says nothing about whether the cards are
+ * safe; it says something about the term list.
+ */
+const reviewQueue = [];
 
 /** Prose legitimately names glyphs the rules forbid; code does not. */
 const stripComments = (src) =>
@@ -115,10 +124,19 @@ function validate(file, card, source) {
     note(file, id, 'fewer than two options');
   } else {
     for (const o of card.options) {
-      if (!o.spokenForm) note(file, id, `option "${o.label ?? '?'}" has no spokenForm — accessibility is content work, not engineering`);
       checkEmoji(file, id, `option "${o.label ?? '?'}"`, `${o.glyph ?? ''}${o.label ?? ''}`);
     }
+    // CL4 shape. Whether the wording carries the MEANING is CL4 semantic
+    // and belongs to the reviewer; this is the half a machine can hold.
+    for (const p of checkSpokenForms(card.options)) {
+      note(file, id, `option ${p.optionId}: ${p.problem} — CL4`);
+    }
   }
+
+  // CL2's detector. Advisory by construction — collected for the review
+  // queue, never added to `problems`. Doc 33: a pattern list that gates
+  // merges gets tuned until it stops firing.
+  for (const f of flagCard(card)) reviewQueue.push({ file, ...f });
   if (card.redlines?.length) note(file, id, `declares redlines: ${card.redlines.join(', ')}`);
 
   if (!source?.reviewGated) return;
@@ -199,6 +217,16 @@ console.log(`  cards:    ${cards} across ${seedFiles} seed file(s)`);
 console.log(`  manifest: ${SUPPORTED_EMOJI_SEQUENCES.length} permitted sequences`);
 console.log(`  rules:    v${RULES_VERSION}, ${BAND_SAFETY_RULES.B13_15.length}/${BAND_SAFETY_RULES.B16_17.length}/${BAND_SAFETY_RULES.B18_PLUS.length} for 13-15 / 16-17 / 18+`);
 console.log('');
+
+if (reviewQueue.length) {
+  console.log(`  \x1b[33m${reviewQueue.length} card(s) flagged for human review — CL2\x1b[0m`);
+  console.log('  These are work items, not verdicts. A flag is a reason to look.');
+  console.log('  An unflagged card has not been approved by anything.\n');
+  for (const f of reviewQueue) {
+    console.log(`    ${f.cardId}  ${f.category}  "${f.matched}"  in ${f.where}`);
+  }
+  console.log('');
+}
 
 if (problems.length) {
   console.error(`\x1b[31m${problems.length} taxonomy violation(s)\x1b[0m`);
