@@ -14,6 +14,7 @@ import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
 import { join, extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 
@@ -291,21 +292,56 @@ const ciCovered = new Set(entries.filter((e) => field(e, 'ciScope')).map((e) => 
 const validated = new Set(entries.filter((e) => field(e, 'validated')).map((e) => e.id));
 
 /**
- * END_TO_END_VALIDATED is the status most easily faked, so it is checked
- * against evidence rather than taken on the registry's word: the id must
- * appear in a real case in the self-test. A claim with no case behind it
- * is the same class of error as a CI check described as a control.
+ * END_TO_END_VALIDATED against evidence of a RUN, not evidence of a CASE.
+ *
+ * The first version of this read tools/test-gate.mjs and looked for the
+ * id in an `ids:` array. That proves a case is written. It does not prove
+ * it ran, and it does not prove it passed — and while the self-test was
+ * aborting at case 3, five invariants held the status on cases that had
+ * never executed. Same substitution the whole gate exists to prevent,
+ * one rung up: evidence a check exists standing in for evidence it worked.
+ *
+ * So the evidence is the artifact the self-test writes, and it is bound to
+ * the source that produced it — editing a case to assert nothing changes
+ * the hash and invalidates the run rather than inheriting its credit.
+ *
+ * A missing or stale artifact is NOT a failure. It means nothing is
+ * validated, which is the honest reading and is loud in the summary. It
+ * also has to be non-fatal because the self-test runs this gate inside
+ * sandboxes that have no artifact — a failure there would break the
+ * control case and, with it, the only thing establishing that the
+ * unmodified tree passes.
  */
-const selfTest = read('tools/test-gate.mjs');
-const casedIds = new Set(
-  [...selfTest.matchAll(/ids:\s*\[([^\]]*)\]/g)]
-    .flatMap((m) => [...m[1].matchAll(/'([^']+)'/g)].map((x) => x[1])),
-);
+const selfTestSource = read('tools/test-gate.mjs');
+const expectedHash = createHash('sha256').update(selfTestSource).digest('hex');
+
+let evidence = null;
+let evidenceNote = 'no self-test run on this tree — run `node tools/test-gate.mjs`';
+try {
+  const raw = JSON.parse(read('.gate/self-test.json'));
+  if (raw.sourceHash !== expectedHash) {
+    evidenceNote = 'the self-test changed since its last run — evidence is stale';
+  } else if (!raw.clean) {
+    evidence = raw;
+    evidenceNote = `the last self-test run had failures: ${(raw.failed ?? []).join(' ') || 'see output'}`;
+  } else {
+    evidence = raw;
+    evidenceNote = null;
+  }
+} catch {
+  // absent or unreadable — evidenceNote already says so
+}
+
+const proven = new Set(evidence?.passed ?? []);
+
 for (const id of validated) {
-  if (!casedIds.has(id)) {
-    failures.push(`${id} claims END_TO_END_VALIDATED but tools/test-gate.mjs has no case for it`);
+  if (!proven.has(id)) {
+    console.log(`  \x1b[33m·\x1b[0m ${id.padEnd(9)} claims END_TO_END_VALIDATED — unproven on this tree`);
   }
 }
+
+/** Only ids the run actually proved carry the status. */
+for (const id of [...validated]) if (!proven.has(id)) validated.delete(id);
 
 const dupes = registered.filter((id, i) => registered.indexOf(id) !== i);
 if (dupes.length) failures.push(`registry lists ${[...new Set(dupes)].join(', ')} more than once`);
@@ -346,7 +382,7 @@ const held = registered.filter((id) => !pending.has(id));
 console.log(`  SPECIFIED                 ${registered.length}`);
 console.log(`  ENFORCEMENT_POINT_BUILT   ${held.length}`);
 console.log(`  CI_CHECK_EXISTS           ${ciCovered.size}`);
-console.log(`  END_TO_END_VALIDATED      ${validated.size}`);
+console.log(`  END_TO_END_VALIDATED      ${validated.size}${evidenceNote ? '   \x1b[33m<- ' + evidenceNote + '\x1b[0m' : ''}`);
 
 const supporting = [...ciCovered].filter((id) => pending.has(id));
 if (supporting.length) {

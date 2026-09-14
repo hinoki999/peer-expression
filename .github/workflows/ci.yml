@@ -16,6 +16,10 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
+      # The self-test produces the evidence the gate consumes for
+      # END_TO_END_VALIDATED. Without it the gate reports zero validated
+      # rather than trusting the registry's word.
+      - run: node tools/test-gate.mjs
       - run: node tools/check-invariants.mjs
 
   taxonomy:

@@ -35,3 +35,7 @@ research/corpus/
 coverage/
 
 Claude outputs/
+
+# Evidence of a self-test run. Never committed — a committed one would be
+# a claim about a run that may not have happened on this tree.
+.gate/
