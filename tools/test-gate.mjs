@@ -19,13 +19,23 @@
  * an interrupted run cannot leave a sabotaged file behind — which the
  * by-hand version could, and nearly did.
  */
-import { cpSync, mkdtempSync, readFileSync, writeFileSync, rmSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
+import {
+  cpSync, mkdtempSync, mkdirSync, readFileSync, writeFileSync, rmSync, existsSync,
+} from 'node:fs';
+import { join, dirname } from 'node:path';
+import { createHash } from 'node:crypto';
 import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
+
+/**
+ * Where the evidence goes. Not committed — it records a run, and a
+ * committed one would be a claim about a run that may never have happened
+ * on this tree.
+ */
+const RESULT = join(ROOT, '.gate/self-test.json');
 // `docs` is copied because the gate writes the enforcement map into it —
 // a missing directory would fail the control case for a reason that has
 // nothing to do with any guarantee.
@@ -151,37 +161,77 @@ const problems = [];
   console.log('  \x1b[32mPASS\x1b[0m  control — an unmodified copy passes');
 }
 
+/** Ids that survived a real mutation. This is the evidence — not CASES. */
+const passedIds = new Set();
+const failedIds = new Set();
+
 for (const c of CASES) {
   const dir = sandbox();
   const target = join(dir, c.file);
+  const label = c.ids.length ? c.ids.join('/') : '(unregistered rule)';
   try {
-    if (c.remove) rmSync(target, { force: true });
-    else if (c.create) writeFileSync(target, c.create);
-    else {
+    if (c.remove) {
+      // It has to have been there, or deleting it proves nothing.
+      if (!existsSync(target)) throw new Error(`${c.file} is not in the sandbox`);
+      rmSync(target, { force: true });
+    } else if (c.create) {
+      // db/seed/cards is an empty directory, and git does not track those
+      // — so it existed for whoever made it locally and for nobody else.
+      // That is how this file shipped crashing at case 3 with six live
+      // cases behind it never running. Create the parent, never assume it.
+      mkdirSync(dirname(target), { recursive: true });
+      writeFileSync(target, c.create);
+    } else {
+      if (!existsSync(target)) throw new Error(`${c.file} is not in the sandbox`);
       const before = readFileSync(target, 'utf8');
       const after = c.edit(before);
-      if (after === before) {
-        problems.push(`${c.ids.join('/')} — the mutation changed nothing; the anchor has moved`);
-        console.log(`  \x1b[31mFAIL\x1b[0m  ${c.ids.join('/')}  ${c.what} — mutation is stale`);
-        continue;
-      }
+      if (after === before) throw new Error('the mutation changed nothing — the anchor has moved');
       writeFileSync(target, after);
     }
 
     const { failed, out } = runGate(dir);
-    if (!failed) {
-      problems.push(`${c.ids.join('/')} — ${c.what}: the gate passed`);
-      console.log(`  \x1b[31mFAIL\x1b[0m  ${c.ids.join('/')}  ${c.what} — gate passed`);
-    } else if (!c.expect.test(out)) {
-      problems.push(`${c.ids.join('/')} — ${c.what}: failed for the wrong reason`);
-      console.log(`  \x1b[31mFAIL\x1b[0m  ${c.ids.join('/')}  ${c.what} — wrong reason`);
-    } else {
-      console.log(`  \x1b[32mPASS\x1b[0m  ${c.ids.join('/')}  ${c.what}`);
-    }
+    if (!failed) throw new Error('the gate passed');
+    if (!c.expect.test(out)) throw new Error('the gate failed for the wrong reason');
+
+    for (const id of c.ids) passedIds.add(id);
+    console.log(`  \x1b[32mPASS\x1b[0m  ${label}  ${c.what}`);
+  } catch (e) {
+    // Collect, never abort. A self-test that stops at the first problem
+    // cannot report the state of the remaining cases — which is precisely
+    // how six of them sat unrun behind one crash.
+    for (const id of c.ids) failedIds.add(id);
+    problems.push(`${label} — ${c.what}: ${e.message}`);
+    console.log(`  \x1b[31mFAIL\x1b[0m  ${label}  ${c.what} — ${e.message}`);
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
 }
+
+/**
+ * Emit what actually happened.
+ *
+ * The gate used to establish END_TO_END_VALIDATED by scanning this file's
+ * source for an `ids:` array, which proves a case is *written* — not that
+ * it ran, and not that it passed. With the run aborting at case 3, five
+ * invariants held the status on cases that had never executed, including
+ * the device key and the privacy floors.
+ *
+ * `sourceHash` binds the evidence to the file that produced it, so a case
+ * edited to assert nothing invalidates the run rather than inheriting its
+ * credit.
+ */
+mkdirSync(dirname(RESULT), { recursive: true });
+writeFileSync(RESULT, `${JSON.stringify({
+  generatedAt: new Date().toISOString(),
+  sourceHash: createHash('sha256').update(readFileSync(fileURLToPath(import.meta.url))).digest('hex'),
+  cases: CASES.length,
+  passed: [...passedIds].sort(),
+  failed: [...failedIds].sort(),
+  clean: problems.length === 0,
+}, null, 2)}\n`);
+
+console.log('');
+console.log(`  wrote .gate/self-test.json — ${passedIds.size} id(s) proved`);
 
 console.log('');
 if (problems.length) {
